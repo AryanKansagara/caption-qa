@@ -87,7 +87,7 @@ function Tracks({ p }: { p: Project }) {
                   </td>
                   <td className="small">{FORMAT_LABEL[t.format]}</td>
                   <td className="num">{t.cues.length}</td>
-                  <td className="row end"><button type="button" className="btn danger-ghost sm" onClick={async () => {
+                  <td className="num"><button type="button" className="btn danger-ghost sm" onClick={async () => {
                     if (!(await ask(`Remove ${t.fileName}?`, 'Removes this track and its edits from the project. You can undo it.', 'Remove'))) return
                     await updateTracks(p, p.tracks.filter(x => x.id !== t.id), `Remove ${t.fileName}`)
                     toast(`Removed ${t.fileName}`)

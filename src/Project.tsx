@@ -431,7 +431,7 @@ function Export({ p, qc }: { p: Project; qc: TrackQC[] }) {
                     <td><select aria-label={`Export format for ${langName(t.lang)}`} value={formatOf(t)} onChange={e => setFmt({ ...fmt, [t.id]: e.target.value as Format })}>{(Object.keys(FORMAT_LABEL) as Format[]).map(f => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}</select></td>
                     <td className="num">{t.cues.length}</td>
                     <td className="num"><span className={`score-chip ${scoreClass(q.score)}`}>{q.score}</span></td>
-                    <td className="row gap-sm end"><CopyButton text={textOf(t)} /><button type="button" className="btn outline sm" onClick={() => download(fileOf(t), textOf(t), 'text/plain;charset=utf-8')}>Download</button></td>
+                    <td><div className="row gap-sm end"><CopyButton text={textOf(t)} /><button type="button" className="btn outline sm" onClick={() => download(fileOf(t), textOf(t), 'text/plain;charset=utf-8')}>Download</button></div></td>
                   </tr>
                 )
               })}

@@ -554,3 +554,10 @@ details summary { cursor: pointer; }
 
 .panel-head select { width: auto; min-width: 160px; }
 .panel-head .row select { min-height: 34px; padding: 5px 10px; font-size: 14px; }
+.chip-dark { white-space: nowrap; }
+.sbs td.pre { min-width: 160px; }
+@media (max-width: 720px) {
+  .screen-src { display: none; }
+  .chip-dark { font-size: 9.5px; padding: 4px 6px; }
+  .tl-ruler span:nth-child(even) { visibility: hidden; }
+}
