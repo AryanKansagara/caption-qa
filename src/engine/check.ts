@@ -1,5 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
-import { breakScore, cps, isDialogue, lineChars, plain, rebreak, textChars, weakEnd, wordCount, wpm } from './text.ts'
+import { breakProblem, cps, lineChars, plain, textChars, weakEnd, wordCount, wpm } from './text.ts'
 import type { Cue } from './types.ts'
 
 export type RuleId =
@@ -133,14 +133,11 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
       if (n > r.maxChars) add('line-length', c, 'error', `Line ${k + 1} has ${n} characters (max ${r.maxChars}).`)
     })
     if (lines.length > r.maxLines) add('line-count', c, 'error', `${lines.length} lines (max ${r.maxLines}).`)
-    else if (!isDialogue(c.text)) {
-      const w = lines.length === 2 ? weakEnd(lines[0], ctx.lang) : null
-      if (w) add('line-break', c, 'warn', `Line 1 ends on "${w}", which belongs with the next line.`)
-      else if (lines.length === 2 && lineChars(lines.join(' '), half) <= r.maxChars) add('line-break', c, 'warn', 'Fits on one line but is split over two.')
-      else if (lines.length === 2 && lines.every(l => lineChars(l, half) <= r.maxChars)) {
-        const better = rebreak(c.text, r.maxChars, ctx.lang, half)
-        if (better !== c.text && breakScore(better, r.maxChars, ctx.lang, half) + 10 < breakScore(c.text, r.maxChars, ctx.lang, half)) add('line-break', c, 'warn', 'Unbalanced lines; a better break is available.')
-      }
+    else {
+      const bp = breakProblem(c.text, r.maxChars, r.maxLines, ctx.lang, half)
+      if (bp === 'weak-end') add('line-break', c, 'warn', `Line 1 ends on "${weakEnd(lines[0], ctx.lang)}", which belongs with the next line.`)
+      else if (bp === 'one-line') add('line-break', c, 'warn', 'Fits on one line but is split over two.')
+      else if (bp === 'unbalanced') add('line-break', c, 'warn', 'Unbalanced lines; a better break is available.')
     }
 
     const minDur = Math.max(r.minDurationMs, r.minMsPerWord * wordCount(c.text, ctx.lang))

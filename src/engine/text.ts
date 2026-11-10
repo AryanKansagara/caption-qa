@@ -55,7 +55,8 @@ export const isDialogue = (text: string) => text.split('\n').length > 1 && text.
 
 function scoreBreak(a: string, b: string, max: number, lang: string, half: boolean) {
   const la = lineChars(a, half), lb = lineChars(b, half)
-  let s = Math.abs(la - lb)
+  // Small imbalances are fine; keeping linguistic units together matters more than equal lengths.
+  let s = Math.max(0, Math.abs(la - lb) - 10)
   if (la > max) s += 1000 + (la - max) * 50
   if (lb > max) s += 1000 + (lb - max) * 50
   if (/[.,;:!?…。，、！？]$/.test(plain(a).trim())) s -= 12
@@ -93,4 +94,45 @@ export function rebreak(text: string, maxChars: number, lang = 'en', halfWidthLa
 export const breakScore = (text: string, maxChars: number, lang: string, half: boolean) => {
   const l = text.split('\n')
   return l.length === 2 ? scoreBreak(l[0], l[1], maxChars, lang, half) : l.length === 1 ? 0 : 999
+}
+
+const STOP: Record<string, string[]> = {
+  en: ['the', 'and', 'you', 'is', 'to', 'of', 'it', 'that', 'what', 'we', 'this', 'with'],
+  es: ['el', 'la', 'que', 'de', 'y', 'los', 'es', 'en', 'por', 'una', 'con', 'para'],
+  de: ['der', 'die', 'und', 'das', 'ist', 'nicht', 'ich', 'sie', 'es', 'wir', 'mit', 'ein'],
+  fr: ['le', 'la', 'et', 'les', 'est', 'que', 'je', 'vous', 'pas', 'une', 'des', 'nous'],
+  it: ['il', 'che', 'di', 'e', 'non', 'la', 'un', 'per', 'sono', 'una', 'con', 'mi'],
+  pt: ['o', 'que', 'de', 'e', 'não', 'um', 'uma', 'os', 'para', 'com', 'você', 'ele'],
+}
+
+/** Rough language guess from the file name (`_de.srt`, `.es-ES.vtt`) and then from script and stopwords. */
+export function guessLang(text: string, fileName = ''): string | null {
+  const m = fileName.toLowerCase().match(/(?:^|[._\-\s])([a-z]{2})(?:[-_][a-z]{2,4})?\.(?:srt|vtt|ass|ssa|ttml|dfxp|xml|sbv)$/)
+  if (m && m[1] in STOP || m && ['ja', 'ko', 'zh', 'nl', 'pl', 'sv', 'tr', 'ar', 'hi', 'ru'].includes(m[1])) return m![1]
+  const p = plain(text).slice(0, 20000)
+  if (/[぀-ヿ]/.test(p)) return 'ja'
+  if (/[가-힯]/.test(p)) return 'ko'
+  if (/[一-鿿]/.test(p)) return 'zh'
+  const words = p.toLowerCase().split(/[^\p{L}]+/u)
+  let best: string | null = null, bestN = 0
+  for (const [l, list] of Object.entries(STOP)) {
+    const set = new Set(list)
+    const n = words.reduce((k, w) => k + (set.has(w) ? 1 : 0), 0)
+    if (n > bestN) { bestN = n; best = l }
+  }
+  return bestN >= 3 ? best : null
+}
+
+export type BreakProblem = 'too-long' | 'too-many' | 'weak-end' | 'one-line' | 'unbalanced' | null
+
+/** Why a cue's line breaks are wrong, or null. Used by both the check and the fixer so they agree. */
+export function breakProblem(text: string, maxChars: number, maxLines: number, lang: string, half = false): BreakProblem {
+  const lines = text.split('\n')
+  if (lines.some(l => lineChars(l, half) > maxChars)) return 'too-long'
+  if (lines.length > maxLines) return 'too-many'
+  if (isDialogue(text) || lines.length !== 2) return null
+  if (weakEnd(lines[0], lang)) return 'weak-end'
+  if (lineChars(lines.join(' '), half) <= maxChars) return 'one-line'
+  const better = rebreak(text, maxChars, lang, half)
+  return better !== text && breakScore(better, maxChars, lang, half) + 15 < breakScore(text, maxChars, lang, half) ? 'unbalanced' : null
 }

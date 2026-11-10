@@ -5,6 +5,7 @@ import { serialize } from './serialize.ts'
 import { align, check, expansion, namesIn, score, summarize } from './check.ts'
 import { applyChange, autoFix, convertFps, FPS, needMs, propose, resync, shift } from './fix.ts'
 import { customFrom, PROFILES, rulesFor } from './rules.ts'
+import * as textMod from './text.ts'
 import { cps, lineChars, rebreak, weakEnd, wordCount } from './text.ts'
 import { SAMPLE_FILES, SAMPLE_SHOTS } from './sample.ts'
 import type { Cue } from './types.ts'
@@ -281,4 +282,12 @@ test('shift, two-point resync and 23.976 to 25 fps conversion', () => {
   const pal = convertFps([cue('a', 25000, 26000, 'x')], FPS.film, FPS.pal)
   assert.equal(pal[0].start, Math.round(25000 * (24000 / 1001) / 25))
   assert.throws(() => resync(cues, 5, 6, 5, 7))
+})
+
+test('guesses track language from the file name, then the script, then stopwords', () => {
+  const { guessLang } = textMod
+  assert.equal(guessLang('', 'show_s01e01.de-DE.srt'), 'de')
+  assert.equal(guessLang('二人は付き合ってるの？', 'x.srt'), 'ja')
+  assert.equal(guessLang('Lo primero es la masa madre. Necesita 36 horas de principio a fin, con una harina que es para el pan.', 'x.srt'), 'es')
+  assert.equal(guessLang('12345', 'x.srt'), null)
 })

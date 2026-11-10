@@ -1,5 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
-import { lineChars, plain, rebreak, textChars, wordCount } from './text.ts'
+import { breakProblem, lineChars, plain, rebreak, textChars, wordCount } from './text.ts'
 import type { Cue } from './types.ts'
 
 export type FixKind = 'overlap' | 'gap' | 'split' | 'rebreak' | 'snap' | 'chain' | 'extend' | 'merge'
@@ -94,7 +94,7 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
     }
 
     const rb = rebreak(c.text, r.maxChars, ctx.lang, r.halfWidthLatin)
-    if (rb !== c.text && fits(rb, r)) push('rebreak', rb.includes('\n') ? 'Balance the two lines and keep short words with their nouns.' : 'Fits on one line.', [c], [{ ...c, text: rb }])
+    if (rb !== c.text && fits(rb, r) && breakProblem(c.text, r.maxChars, r.maxLines, ctx.lang, r.halfWidthLatin)) push('rebreak', rb.includes('\n') ? 'Balance the two lines and keep short words with their nouns.' : 'Fits on one line.', [c], [{ ...c, text: rb }])
 
     if (r.shotChangeFrames > 0 && shots.length) {
       const w = r.shotChangeFrames * f
