@@ -27,7 +27,7 @@ export function detectFormat(text: string, fileName = ''): Format | null {
   const head = text.replace(/^﻿/, '').trimStart().slice(0, 2000)
   if (/^WEBVTT/.test(head)) return 'vtt'
   if (/^\[Script Info\]/i.test(head) || /^\[V4\+? Styles\]/im.test(head) || /^Dialogue:/m.test(head)) return 'ass'
-  if (/<tt[\s>]/.test(head) || /<\?xml/.test(head) && /<tt|<p\s/.test(text.slice(0, 6000))) return 'ttml'
+  if (/<(\w+:)?tt[\s>]/.test(head) || /<\?xml/.test(head) && /<(\w+:)?(tt|p)\s/.test(text.slice(0, 6000))) return 'ttml'
   if (/^\d+\s*\r?\n\s*\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->/m.test(head)) return 'srt'
   if (/^\d{1,2}:\d{2}:\d{2}\.\d{3},\d{1,2}:\d{2}:\d{2}\.\d{3}\s*$/m.test(head)) return 'sbv'
   if (/-->/.test(head)) return ext === 'vtt' ? 'vtt' : 'srt'
@@ -81,6 +81,9 @@ const ensureIds = (cues: Cue[]) => cues.forEach((c, i) => { c.id = `c${i + 1}` }
 
 // ---------- SRT / VTT ----------
 
+const VTT_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', nbsp: '\u00a0', lrm: '\u200e', rlm: '\u200f', quot: '"', apos: "'" }
+const vttUnescape = (s: string) => s.replace(/&(amp|lt|gt|nbsp|lrm|rlm|quot|apos);/g, (_, n) => VTT_ENTITIES[n])
+
 function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: number[]; issues: ParseIssue[] } {
   const L = lines(text)
   const cues: Cue[] = [], lineOf: number[] = [], issues: ParseIssue[] = []
@@ -97,7 +100,8 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
     const block: string[] = []
     while (i < L.length && L[i].trim() !== '') block.push(L[i++])
     if (vtt && /^(NOTE|STYLE|REGION)\b/.test(block[0])) continue
-    const k = block.findIndex(l => l.includes('-->'))
+    const timing = block.findIndex(l => ARROW.test(l))
+    const k = timing >= 0 ? timing : block.findIndex(l => l.includes('-->'))
     if (k < 0) {
       issues.push({ line: blockStart + 1, kind: 'timecode', severity: 'error', message: `No timecode line found in this block ("${block[0].slice(0, 40)}"). Block skipped.` })
       continue
@@ -106,7 +110,7 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
       const num = block[0].trim()
       if (k === 0) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: 'Cue number missing before the timecode.' })
       else if (!/^\d+$/.test(num)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Cue number "${num.slice(0, 20)}" is not a number.` })
-      else if (+num !== expectNum) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
+      else if (+num !== expectNum && !(cues.length === 0 && +num === 0)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
       if (/^\d+$/.test(num)) expectNum = +num + 1
       else expectNum++
     }
@@ -123,7 +127,7 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
     }
     if (!vtt && m[1].includes('.')) issues.push({ line: lineNo, kind: 'timecode', severity: 'warn', message: 'SRT timecodes should use a comma before milliseconds.' })
     let body = block.slice(k + 1).join('\n')
-    if (vtt) body = body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, '')
+    if (vtt) body = vttUnescape(body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, ''))
     body = body.replace(/<font[^>]*>|<\/font>/gi, '').replace(/\{\\an\d\}/g, '')
     cues.push({ id: '', start, end, text: body.trim() })
     lineOf.push(lineNo)
@@ -188,6 +192,10 @@ function ttmlTime(s: string, fps: number, tickRate: number): number | null {
   if (m) return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + (m[4] ? Math.round(+`0.${m[4]}` * 1000) : 0)
   m = s.match(/^(\d+):(\d{2}):(\d{2}):(\d+)(?:\.\d+)?$/)
   if (m) return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + Math.round(+m[4] * 1000 / fps)
+  m = s.match(/^(\d{1,2}):(\d{2})\.(\d+)$/)
+  if (m) return (+m[1] * 60 + +m[2]) * 1000 + Math.round(+`0.${m[3]}` * 1000)
+  // Bare seconds are not valid TTML but Apple/iTunes files use them.
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(+s * 1000)
   m = s.match(/^([\d.]+)(h|m|s|ms|f|t)$/)
   if (m) {
     const v = +m[1]
@@ -200,6 +208,8 @@ function ttmlTime(s: string, fps: number, tickRate: number): number | null {
 const xmlUnescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([\da-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, '&')
 
 function parseTtml(text: string) {
+  // EBU-TT and some broadcast exports prefix every element (<tt:p>, <tt:br/>). Same length per line, so line numbers stay right.
+  text = text.replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1')
   const cues: Cue[] = [], lineOf: number[] = [], issues: ParseIssue[] = []
   const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)(?:[\\w-]+:)?${name}\\s*=\\s*"([^"]*)"`))?.[1]
   const tt = text.match(/<tt[\s>][^>]*>/)?.[0] ?? ''
@@ -208,6 +218,13 @@ function parseTtml(text: string) {
   const lineStarts: number[] = [0]
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lineStarts.push(i + 1)
   const lineAt = (pos: number) => { let lo = 0, hi = lineStarts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1 } return lo + 1 }
+  // Italics can be inline (tts:fontStyle) or come from a <style xml:id=".."> referenced by style="..".
+  const italicStyles = new Set<string>()
+  for (const sm of text.matchAll(/<style\b([^>]*)\/?>/g)) {
+    const id = attr(sm[1], 'id')
+    if (id && attr(sm[1], 'fontStyle') === 'italic') italicStyles.add(id)
+  }
+  const isItalic = (at: string) => attr(at, 'fontStyle') === 'italic' || (attr(at, 'style') ?? '').split(/\s+/).some(id => italicStyles.has(id))
   const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text))) {
@@ -220,10 +237,11 @@ function parseTtml(text: string) {
       issues.push({ line, kind: 'timecode', severity: 'error', message: `Missing or unreadable begin/end on <p> (begin="${b ?? ''}", end="${e ?? d ?? ''}"). Cue skipped.` })
       continue
     }
-    const body = m[2]
+    const raw = isItalic(m[1]) ? `<span tts:fontStyle="italic">${m[2]}</span>` : m[2]
+    const body = raw
       .replace(/\s*\n\s*/g, ' ')
       .replace(/<br\s*\/?>/g, '\n')
-      .replace(/<span\b[^>]*fontStyle\s*=\s*"italic"[^>]*>([\s\S]*?)<\/span>/g, '<i>$1</i>')
+      .replace(/<span\b([^>]*)>([\s\S]*?)<\/span>/g, (all, at: string, inner: string) => isItalic(at) ? `<i>${inner}</i>` : all)
       .replace(/<(?!\/?i>)[^>]+>/g, '')
     cues.push({ id: '', start, end, text: xmlUnescape(body).split('\n').map(s => s.trim()).join('\n').trim() })
     lineOf.push(line)

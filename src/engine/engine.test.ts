@@ -291,3 +291,66 @@ test('guesses track language from the file name, then the script, then stopwords
   assert.equal(guessLang('Lo primero es la masa madre. Necesita 36 horas de principio a fin, con una harina que es para el pan.', 'x.srt'), 'es')
   assert.equal(guessLang('12345', 'x.srt'), null)
 })
+
+// ---------- Real-world layouts (excerpts matching public sample files) ----------
+
+test('EBU-TT with tt: prefixed elements parses (layout of the EBU-TT Live toolkit sample document)', () => {
+  const x = '<?xml version="1.0" ?>\n<tt:tt ttp:timeBase="clock" xml:lang="en-GB" xmlns:tt="http://www.w3.org/ns/ttml" xmlns:ttp="http://www.w3.org/ns/ttml#parameter">\n  <tt:body>\n    <tt:div>\n      <tt:p begin="500ms" end="3420ms" xml:id="ID005">\n        <tt:span>Some example text...</tt:span>\n        <tt:br/>\n        <tt:span>And another line</tt:span>\n      </tt:p>\n    </tt:div>\n  </tt:body>\n</tt:tt>\n'
+  assert.equal(detectFormat(x, 'live.xml'), 'ttml')
+  const r = parse(x)
+  assert.equal(r.format, 'ttml')
+  assert.deepEqual(r.cues.map(c => [c.start, c.end, c.text]), [[500, 3420, 'Some example text...\nAnd another line']])
+  assert.equal(r.issues.length, 0)
+})
+
+test('Apple/iTunes TTML with bare-second times and M:SS.fff clocks parses', () => {
+  const x = '<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="en">\n<body dur="3:58.640">\n<div begin="19.764" end="59.300">\n<p begin="19.764" end="21.900"><span begin="19.764" end="20.105">When</span> <span begin="20.105" end="20.326">you were</span> <span begin="20.326" end="20.607">here</span></p>\n<p begin="1:04.594" end="1:06.898">Couldn\'t look you in the eye</p>\n</div></body></tt>'
+  const r = parse(x)
+  assert.deepEqual(r.cues.map(c => [c.start, c.end, c.text]), [[19764, 21900, 'When you were here'], [64594, 66898, "Couldn't look you in the eye"]])
+  assert.equal(r.issues.length, 0)
+})
+
+test('DFXP italics from referenced styles and tick-rate timing (Netflix-style DFXP layout)', () => {
+  const x = '<?xml version="1.0" encoding="UTF-8"?>\n<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:tickRate="10000000">\n<head><styling><style xml:id="s1" tts:fontStyle="italic"/><style xml:id="s2" tts:color="white"/></styling></head>\n<body><div>\n<p begin="10010000t" end="30030000t" style="s1">Whole cue italic</p>\n<p begin="40040000t" end="60060000t">Plain <span style="s2 s1">styled</span> and <span tts:fontStyle="italic">inline</span> and <span style="s2">not</span></p>\n</div></body></tt>'
+  const r = parse(x, null, 'ep01_en.dfxp')
+  assert.deepEqual(r.cues.map(c => [c.start, c.end, c.text]), [[1001, 3003, '<i>Whole cue italic</i>'], [4004, 6006, 'Plain <i>styled</i> and <i>inline</i> and not']])
+})
+
+test('WebVTT character references are decoded (W3C webvtt.js entities test)', () => {
+  const r = parse('WEBVTT\n\n00:00.000 --> 00:01.000\nTom &amp; Jerry &lt;3\n\n00:01.000 --> 00:02.000\n&amp\n\n00:02.000 --> 00:03.000\nnon&nbsp;breaking &lrm;x\n')
+  assert.deepEqual(r.cues.map(c => c.text), ['Tom & Jerry <3', '&amp', 'non breaking ‎x'])
+})
+
+test('WebVTT picks the real timing line when the cue id contains an arrow', () => {
+  const r = parse('WEBVTT\n\nfoo-->\n00:00:01.000 --> 00:00:02.000\ntext1\n')
+  assert.deepEqual(r.cues.map(c => [c.start, c.text]), [[1000, 'text1']])
+  assert.equal(r.issues.length, 0)
+})
+
+test('SRT numbered from 0 (common in fan and AllSubs releases) is not a numbering error', () => {
+  const r = parse('0\n00:00:01,000 --> 00:00:04,000\nDownloaded From www.AllSubs.org\n\n1\n00:00:27,074 --> 00:00:30,566\nCE FILM RELATE DES ÉVÉNEMENTS\nQUI ONT EXISTÉ.\n')
+  assert.equal(r.issues.length, 0)
+  assert.equal(r.cues.length, 2)
+  // Numbering that starts at 0 later in the file is still a jump.
+  assert.equal(parse('1\n00:00:01,000 --> 00:00:02,000\nA\n\n0\n00:00:03,000 --> 00:00:04,000\nB\n').issues.filter(i => i.kind === 'numbering').length, 1)
+})
+
+test('SRT capability tester: zero-length hidden cue, font tags stripped, {\\an8} removed', () => {
+  const r = parse('1\n00:00:00,000 --> 00:00:00,000\nDon\'t show this text it may be used to insert hidden data\n\n2\n00:00:01,500 --> 00:00:04,500\n<font color="#0000FF">This text should be blue</font>\n{\\an8}<b><i>Top</i></b>\n')
+  assert.deepEqual(r.issues.map(i => i.kind), ['negative'])
+  assert.equal(r.cues[1].text, 'This text should be blue\n<b><i>Top</i></b>')
+})
+
+test('YouTube SBV export with trailing spaces and CJK text', () => {
+  const r = parse('0:00:00.000,0:00:03.629\n在许多科学领域（如生物信息学，医学成像和天文学）\n\n0:00:03.900,0:00:08.460\ngood morning everybody \nhere we are back\n', null, 'captions zh-Hans.sbv')
+  assert.equal(r.format, 'sbv')
+  assert.deepEqual(r.cues.map(c => [c.start, c.end]), [[0, 3629], [3900, 8460]])
+  assert.equal(r.issues.length, 0)
+})
+
+test('Aegisub ASS with attached-font sections before [Events] reads only dialogue', () => {
+  const x = '﻿[Script Info]\nScriptType: v4.00+\n\n[Fonts]\nfontname: Dialogue.ttf\nM1-_6Dialogue: 0,0:00:00.00,0:00:05.00\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nComment: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,note\nDialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,Test subtitle, with commas.\n'
+  const r = parse(x)
+  assert.equal(r.format, 'ass')
+  assert.deepEqual(r.cues.map(c => [c.start, c.end, c.text]), [[0, 5000, 'Test subtitle, with commas.']])
+})
