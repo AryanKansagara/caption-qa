@@ -148,7 +148,9 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
     const prev = cues[i - 1]
     if (prev) {
       const gap = c.start - prev.end
-      if (gap < 0) add('overlap', c, 'error', `Starts ${-gap} ms before the previous cue ends.`)
+      if (gap < 0) add('overlap', c, 'error', c.start === prev.start && c.end === prev.end
+        ? 'Same in and out times as the previous cue (two positioned events). Most platforms want one cue: merge them into two lines.'
+        : `Starts ${-gap} ms before the previous cue ends.`)
       else if (gap < minGap - 1) add('gap', c, 'error', `Gap of ${Math.round(gap / f)} frames before this cue (min ${r.minGapFrames}).`)
       else if (r.closeGapFrames > 0 && gap < r.closeGapFrames * f - 1 && gap > minGap + 1) add('gap', c, 'warn', `Gap of ${Math.round(gap / f)} frames: close it to ${r.minGapFrames} frames.`)
     }

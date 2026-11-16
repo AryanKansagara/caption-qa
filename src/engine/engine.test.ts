@@ -354,3 +354,10 @@ test('Aegisub ASS with attached-font sections before [Events] reads only dialogu
   assert.equal(r.format, 'ass')
   assert.deepEqual(r.cues.map(c => [c.start, c.end, c.text]), [[0, 5000, 'Test subtitle, with commas.']])
 })
+
+test('identically timed TTML events (pysubs2 ttml_example layout) get a merge hint instead of a generic overlap', () => {
+  const r = parse('<tt xmlns="http://www.w3.org/ns/ttml"><body><div>\n<p begin="28.0s" end="34.6s" style="s2Left">But how is it proved?</p>\n<p begin="28.0s" end="34.6s" style="s1Right">Thus: what we call</p>\n</div></body></tt>')
+  const ov = check(r.cues, en, { lang: 'en' }).filter(i => i.rule === 'overlap')
+  assert.equal(ov.length, 1)
+  assert.match(ov[0].message, /two positioned events/)
+})

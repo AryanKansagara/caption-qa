@@ -21,6 +21,16 @@ Word-for-word subtitles routinely run faster than platform reading-speed limits,
 - **History**: snapshots per delivery version with a compare view and cue-level diff.
 - **Accounts (optional)**: email sign-in syncs projects and snapshots across devices; everything works signed out.
 
+## Tested against real files
+
+The importers are run against public sample files: SubRip from pysrt (UTF-8, Windows-1252, UTF-16 BOM, no indexes, the ale5000 capability tester), TTML/DFXP, Apple TTML and Aegisub ASS from pysubs2, W3C IMSC tests, the WebVTT cue-parsing tests in w3c/webvtt.js, the EBU-TT Live toolkit sample document (prefixed `tt:` elements) and public YouTube `.sbv` exports. Short excerpts matching those layouts are in the engine tests.
+
+## Known gaps
+
+- TTML times on a parent `<div>` are not added to its children, and `timeContainer="seq"` is ignored.
+- Two cues with the same timing in different regions are reported as an overlap (with a merge hint), not shown side by side.
+- SCC, STL and other binary broadcast formats are not supported.
+
 The sample (an English documentary short with Spanish and German subtitles) is synthetic and written for this tool.
 
 ## Run locally
