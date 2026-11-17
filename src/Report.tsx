@@ -64,7 +64,7 @@ export default function Report({ id }: { id: string }) {
           )}
         </section>
       ))}
-      <footer className="report-foot muted small">Caption QA · Built by Aryan Kansagara. Independent project, not affiliated with HeyGen.</footer>
+      <footer className="report-foot muted small">Caption QA · Built by Aryan Kansagara.</footer>
     </div>
   )
 }

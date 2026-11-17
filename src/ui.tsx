@@ -289,7 +289,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand"><Monogram /> <strong>Caption QA</strong></div>
         <nav className="footer-nav" aria-label="Footer"><Link href="/app">Projects</Link><Link href="/docs">Docs</Link><Link href="/settings">Settings</Link></nav>
-        <p>Built by Aryan Kansagara. Independent project, not affiliated with HeyGen.</p>
+        <p>Built by Aryan Kansagara.</p>
         <p className="muted small">Sample subtitles are synthetic and written for this tool. Files are parsed in your browser and stored on this device unless you sign in to sync; video never leaves it.</p>
       </div>
     </footer>
