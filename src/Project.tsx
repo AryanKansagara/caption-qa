@@ -3,6 +3,7 @@ import { TABS, type Tab } from './App.tsx'
 import { RULES, ruleLabel, type RuleId } from './engine/check.ts'
 import { toCsv } from './engine/csv.ts'
 import { autoFix } from './engine/fix.ts'
+import { pairTracks } from './engine/pair-tracks.ts'
 import { fmtTime } from './engine/parse.ts'
 import { langName } from './engine/rules.ts'
 import { serialize } from './engine/serialize.ts'
@@ -296,10 +297,10 @@ function History({ p }: { p: Project }) {
   const [aId, setA] = useState((snaps.length >= 2 ? snaps.at(-2) : snaps.at(-1))?.id ?? 'current')
   const [bId, setB] = useState(snaps.length >= 2 ? snaps.at(-1)!.id : 'current')
   const A = all.find(s => s.id === aId) ?? all[0], B = all.find(s => s.id === bId) ?? current
-  const langs = [...new Set([...A.tracks, ...B.tracks].map(t => t.lang + ':' + t.role))]
+  const pairs = pairTracks(A.tracks, B.tracks).map(x => ({ ...x, track: (x.b ?? x.a)! }))
   const [focus, setFocus] = useState<string | null>(null)
-  const fl = focus ?? langs.find(l => l.endsWith(':target')) ?? langs[0]
-  const ta = A.tracks.find(t => t.lang + ':' + t.role === fl), tb = B.tracks.find(t => t.lang + ':' + t.role === fl)
+  const shown = pairs.find(x => x.key === focus) ?? pairs.find(x => x.track.role === 'target') ?? pairs[0]
+  const ta = shown?.a, tb = shown?.b
   const diff = ta && tb ? cueDiff(ta.cues, tb.cues) : []
   const [label, setLabel] = useState('')
 
@@ -349,13 +350,12 @@ function History({ p }: { p: Project }) {
           <table>
             <thead><tr><th>Track</th><th className="num">Score</th><th className="num">Errors</th><th className="num">Warnings</th><th className="num">Cues</th><th>Rules that changed</th></tr></thead>
             <tbody>
-              {langs.map(l => {
-                const a = A.tracks.find(t => t.lang + ':' + t.role === l), b = B.tracks.find(t => t.lang + ':' + t.role === l)
+              {pairs.map(({ key, a, b, track }) => {
                 const rules = [...new Set([...Object.keys(a?.counts ?? {}), ...Object.keys(b?.counts ?? {})])] as RuleId[]
                 const changed = rules.map(r => [r, (b?.counts[r] ?? 0) - (a?.counts[r] ?? 0)] as const).filter(([, d]) => d)
                 return (
-                  <tr key={l} className={fl === l ? 'sel' : ''} onClick={() => setFocus(l)} style={{ cursor: 'pointer' }}>
-                    <th>{langName(l.split(':')[0])} <small className="muted">{l.split(':')[1]}</small></th>
+                  <tr key={key} className={shown?.key === key ? 'sel' : ''} onClick={() => setFocus(key)} style={{ cursor: 'pointer' }}>
+                    <th>{langName(track.lang)} <small className="muted">{track.role} · {track.fileName}</small></th>
                     <td className="num">{a?.score ?? '—'} &rarr; <b>{b?.score ?? '—'}</b> <Delta v={(b?.score ?? 0) - (a?.score ?? 0)} good="up" /></td>
                     <td className="num">{a?.errors ?? '—'} &rarr; {b?.errors ?? '—'} <Delta v={(b?.errors ?? 0) - (a?.errors ?? 0)} good="down" /></td>
                     <td className="num">{a?.warnings ?? '—'} &rarr; {b?.warnings ?? '—'}</td>
@@ -367,7 +367,7 @@ function History({ p }: { p: Project }) {
             </tbody>
           </table>
         </div>
-        <h3 className="mt">{fl ? langName(fl.split(':')[0]) : ''}: {diff.length} changed cue{diff.length === 1 ? '' : 's'}</h3>
+        <h3 className="mt">{shown ? `${langName(shown.track.lang)} (${shown.track.fileName})` : ''}: {diff.length} changed cue{diff.length === 1 ? '' : 's'}</h3>
         {diff.length === 0 ? <p className="muted small">No cue changes between these versions.</p> : (
           <div className="table-wrap">
             <table className="diff-table">
