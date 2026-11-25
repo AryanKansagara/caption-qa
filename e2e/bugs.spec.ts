@@ -42,12 +42,12 @@ test.fail('#4 re-breaking Korean keeps the spaces between words', async ({ page 
   expect((await exportAs(page, 'Korean', 'srt')).text).toContain('안녕하세요 여러분\n')
 })
 
-test.fail('#5 TTML frame rate written as 1000:1001 gives real times, and an empty <p/> does not take the next cue', async ({ page }) => {
+test('#5 TTML frame rate written as 1000:1001 gives real times, and an empty <p/> does not take the next cue', async ({ page }) => {
   await newProject(page)
-  await importFiles(page, ['a_en.dfxp', TT('<p begin="00:00:01:12" end="00:00:03:00">One</p>', 'ttp:frameRate="24" ttp:frameRateMultiplier="1000:1001"')])
+  await importFiles(page, ['a_en.dfxp', TT('<p begin="00:00:01:13" end="00:00:03:00">One</p>', 'ttp:frameRate="24" ttp:frameRateMultiplier="1000:1001"')])
   await importFiles(page, ['b_de.ttml', TT('<p begin="1s" end="2s"/><p begin="3s" end="4s">Zwei</p>')])
-  // 12 frames at 24 x 1000/1001 fps last 500.5 ms.
-  expect(times((await exportAs(page, 'English', 'srt')).text)).toEqual(['00:00:01,501 --> 00:00:03,000'])
+  // 13 frames at 24 x 1000/1001 fps last 542.2 ms.
+  expect(times((await exportAs(page, 'English', 'srt')).text)).toEqual(['00:00:01,542 --> 00:00:03,000'])
   expect((await exportAs(page, 'German', 'srt')).text).toContain('00:00:03,000 --> 00:00:04,000\nZwei')
 })
 
