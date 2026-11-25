@@ -51,6 +51,8 @@ export function parseClock(s: string): number | null {
 
 const TC = String.raw`(\d+:\d{1,2}:\d{1,2}[.,]\d{1,3}|\d{1,2}:\d{1,2}[.,]\d{1,3})`
 const ARROW = new RegExp(`^\\s*${TC}\\s*-->\\s*${TC}`)
+/** A line meant as a timing line, even when a time in it is unreadable. */
+const TC_LIKE = /^\s*\d\S*:\S*[:.,]\S+\s*-->\s*\S+:\S*[:.,]\S+/
 
 /** Overlap and negative-duration checks shared by every format. `lineOf` maps cue index to its source line. */
 export function validateTiming(cues: Cue[], lineOf: number[]): ParseIssue[] {
@@ -90,47 +92,66 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
   let i = 0
   if (vtt) {
     if (!/^WEBVTT/.test(L[0] ?? '')) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'WebVTT files must start with "WEBVTT".' })
-    while (i < L.length && L[i].trim() !== '') i++
+    while (i < L.length && L[i].trim() !== '' && !TC_LIKE.test(L[i])) i++
+    if (i > 0 && i < L.length && L[i].trim() !== '') issues.push({ line: i + 1, kind: 'format', severity: 'warn', message: 'Blank line missing after the WebVTT header.' })
   }
   let expectNum = 1
   while (i < L.length) {
     while (i < L.length && L[i].trim() === '') i++
     if (i >= L.length) break
-    const blockStart = i
-    const block: string[] = []
-    while (i < L.length && L[i].trim() !== '') block.push(L[i++])
-    if (vtt && /^(NOTE|STYLE|REGION)\b/.test(block[0])) continue
-    const timing = block.findIndex(l => ARROW.test(l))
-    const k = timing >= 0 ? timing : block.findIndex(l => l.includes('-->'))
-    if (k < 0) {
-      issues.push({ line: blockStart + 1, kind: 'timecode', severity: 'error', message: `No timecode line found in this block ("${block[0].slice(0, 40)}"). Block skipped.` })
-      continue
+    let from = i
+    const rows: string[] = []
+    while (i < L.length && L[i].trim() !== '') rows.push(L[i++])
+    if (vtt && /^(NOTE|STYLE|REGION)\b/.test(rows[0])) {
+      // A comment cannot contain a timing line: on the second line this is a cue identifier, further down a new cue starts there.
+      const at = rows.findIndex(l => ARROW.test(l))
+      if (at < 0) continue
+      if (at > 1) from += rows.splice(0, at).length
     }
-    if (!vtt) {
-      const num = block[0].trim()
-      if (k === 0) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: 'Cue number missing before the timecode.' })
-      else if (!/^\d+$/.test(num)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Cue number "${num.slice(0, 20)}" is not a number.` })
-      else if (+num !== expectNum && !(cues.length === 0 && +num === 0)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
-      if (/^\d+$/.test(num)) expectNum = +num + 1
-      else expectNum++
+    // One entry per cue: usually the whole block, more when the blank line between cues is missing.
+    const starts = [0]
+    const head = rows.findIndex(l => TC_LIKE.test(l))
+    for (let k = (head >= 0 ? head : rows.findIndex(l => l.includes('-->'))) + 1; k > 0 && k < rows.length; k++) {
+      if (!TC_LIKE.test(rows[k])) continue
+      const numbered = /^\s*\d+\s*$/.test(rows[k - 1]) && !TC_LIKE.test(rows[k - 1])
+      starts.push(numbered && k - 1 > starts.at(-1)! ? k - 1 : k)
     }
-    const m = block[k].match(ARROW)
-    const lineNo = blockStart + k + 1
-    if (!m) {
-      issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Unreadable timecode "${block[k].trim().slice(0, 60)}". Cue skipped.` })
-      continue
-    }
-    const start = parseClock(m[1]), end = parseClock(m[2])
-    if (start === null || end === null) {
-      issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Invalid time value in "${block[k].trim()}". Cue skipped.` })
-      continue
-    }
-    if (!vtt && m[1].includes('.')) issues.push({ line: lineNo, kind: 'timecode', severity: 'warn', message: 'SRT timecodes should use a comma before milliseconds.' })
-    let body = block.slice(k + 1).join('\n')
-    if (vtt) body = vttUnescape(body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, ''))
-    body = body.replace(/<font[^>]*>|<\/font>/gi, '').replace(/\{\\an\d\}/g, '')
-    cues.push({ id: '', start, end, text: body.trim() })
-    lineOf.push(lineNo)
+    starts.forEach((at, n) => {
+      const blockStart = from + at
+      const block = rows.slice(at, starts[n + 1])
+      if (n) issues.push({ line: blockStart + 1, kind: 'format', severity: 'warn', message: 'Blank line missing before this cue.' })
+      const timing = block.findIndex(l => ARROW.test(l))
+      const k = timing >= 0 ? timing : block.findIndex(l => l.includes('-->'))
+      if (k < 0) {
+        issues.push({ line: blockStart + 1, kind: 'timecode', severity: 'error', message: `No timecode line found in this block ("${block[0].slice(0, 40)}"). Block skipped.` })
+        return
+      }
+      if (!vtt) {
+        const num = block[0].trim()
+        if (k === 0) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: 'Cue number missing before the timecode.' })
+        else if (!/^\d+$/.test(num)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Cue number "${num.slice(0, 20)}" is not a number.` })
+        else if (+num !== expectNum && !(cues.length === 0 && +num === 0)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
+        if (/^\d+$/.test(num)) expectNum = +num + 1
+        else expectNum++
+      }
+      const m = block[k].match(ARROW)
+      const lineNo = blockStart + k + 1
+      if (!m) {
+        issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Unreadable timecode "${block[k].trim().slice(0, 60)}". Cue skipped.` })
+        return
+      }
+      const start = parseClock(m[1]), end = parseClock(m[2])
+      if (start === null || end === null) {
+        issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Invalid time value in "${block[k].trim()}". Cue skipped.` })
+        return
+      }
+      if (!vtt && m[1].includes('.')) issues.push({ line: lineNo, kind: 'timecode', severity: 'warn', message: 'SRT timecodes should use a comma before milliseconds.' })
+      let body = block.slice(k + 1).join('\n')
+      if (vtt) body = vttUnescape(body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, ''))
+      body = body.replace(/<font[^>]*>|<\/font>/gi, '').replace(/\{\\an\d\}/g, '')
+      cues.push({ id: '', start, end, text: body.trim() })
+      lineOf.push(lineNo)
+    })
   }
   return { cues, lineOf, issues }
 }
@@ -196,7 +217,7 @@ function ttmlTime(s: string, fps: number, tickRate: number): number | null {
   if (m) return (+m[1] * 60 + +m[2]) * 1000 + Math.round(+`0.${m[3]}` * 1000)
   // Bare seconds are not valid TTML but Apple/iTunes files use them.
   if (/^\d+(\.\d+)?$/.test(s)) return Math.round(+s * 1000)
-  m = s.match(/^([\d.]+)(h|m|s|ms|f|t)$/)
+  m = s.match(/^(\d+\.?\d*|\.\d+)(h|m|s|ms|f|t)$/)
   if (m) {
     const v = +m[1]
     const mult: Record<string, number> = { h: 3600000, m: 60000, s: 1000, ms: 1, f: 1000 / fps, t: 1000 / tickRate }
@@ -210,11 +231,25 @@ const xmlUnescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
 function parseTtml(text: string) {
   // EBU-TT and some broadcast exports prefix every element (<tt:p>, <tt:br/>). Same length per line, so line numbers stay right.
   text = text.replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1')
+  // Comments are blanked, not cut, so line numbers stay right.
+  text = text.replace(/<!--[\s\S]*?-->/g, c => c.replace(/[^\n]/g, ' '))
   const cues: Cue[] = [], lineOf: number[] = [], issues: ParseIssue[] = []
-  const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)(?:[\\w-]+:)?${name}\\s*=\\s*"([^"]*)"`))?.[1]
+  const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)(?:[\\w-]+:)?${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`))?.slice(1).find(v => v !== undefined)
   const tt = text.match(/<tt[\s>][^>]*>/)?.[0] ?? ''
-  const fps = +(attr(tt, 'frameRate') ?? 30) * (attr(tt, 'frameRateMultiplier')?.split(' ').map(Number).reduce((a, b) => a / b) ?? 1)
-  const tickRate = +(attr(tt, 'tickRate') ?? 10000000)
+  // A rate that cannot be read is NaN, which makes every time that needs it unreadable.
+  const rate = (name: string, fallback: number) => {
+    const v = attr(tt, name)
+    if (v === undefined) return fallback
+    // "1000 1001" in TTML, "1000:1001" in DFXP.
+    const m = name === 'frameRateMultiplier' ? v.trim().match(/^(\d+(?:\.\d+)?)(?:[\s:]+(\d+))?$/) : v.trim().match(/^(\d+(?:\.\d+)?)$/)
+    const n = m ? +m[1] / +(m[2] ?? 1) : NaN
+    if (Number.isFinite(n) && n > 0) return n
+    issues.push({ line: 1, kind: 'format', severity: 'error', message: `Unreadable ${name}="${v.slice(0, 40)}". Times that need it are skipped.` })
+    return NaN
+  }
+  const fps = rate('frameRate', 30) * rate('frameRateMultiplier', 1)
+  const tickRate = rate('tickRate', 10000000)
+  if (tt && !/<\/tt\s*>/.test(text)) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'The file ends before </tt>: it is cut off and cues are missing.' })
   const lineStarts: number[] = [0]
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lineStarts.push(i + 1)
   const lineAt = (pos: number) => { let lo = 0, hi = lineStarts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1 } return lo + 1 }
@@ -225,19 +260,21 @@ function parseTtml(text: string) {
     if (id && attr(sm[1], 'fontStyle') === 'italic') italicStyles.add(id)
   }
   const isItalic = (at: string) => attr(at, 'fontStyle') === 'italic' || (attr(at, 'style') ?? '').split(/\s+/).some(id => italicStyles.has(id))
-  const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/g
+  const re = /<p\b([^>]*?)(?:\/>|>([\s\S]*?)<\/p>)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text))) {
     const line = lineAt(m.index)
+    const content = m[2] ?? '' // none in <p .../>
     const b = attr(m[1], 'begin'), e = attr(m[1], 'end'), d = attr(m[1], 'dur')
     const start = b ? ttmlTime(b, fps, tickRate) : null
     let end = e ? ttmlTime(e, fps, tickRate) : null
     if (end === null && d && start !== null) { const dd = ttmlTime(d, fps, tickRate); end = dd === null ? null : start + dd }
-    if (start === null || end === null) {
+    if (start === null || end === null || !Number.isFinite(start) || !Number.isFinite(end)) {
+      if (m[2] === undefined && !b && !e && !d) continue
       issues.push({ line, kind: 'timecode', severity: 'error', message: `Missing or unreadable begin/end on <p> (begin="${b ?? ''}", end="${e ?? d ?? ''}"). Cue skipped.` })
       continue
     }
-    const raw = isItalic(m[1]) ? `<span tts:fontStyle="italic">${m[2]}</span>` : m[2]
+    const raw = isItalic(m[1]) ? `<span tts:fontStyle="italic">${content}</span>` : content
     const body = raw
       .replace(/\s*\n\s*/g, ' ')
       .replace(/<br\s*\/?>/g, '\n')
@@ -247,7 +284,7 @@ function parseTtml(text: string) {
     lineOf.push(line)
   }
   if (!cues.length && !issues.length) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'No <p begin=".." end=".."> elements found.' })
-  return { cues, lineOf, issues, frameRate: fps }
+  return { cues, lineOf, issues, frameRate: Number.isFinite(fps) ? fps : undefined }
 }
 
 // ---------- SBV ----------
@@ -302,16 +339,44 @@ export function parseBytes(bytes: Uint8Array, fileName?: string, format?: Format
   return r
 }
 
-/** Shot list: one cut per line as seconds (12.48), a clock (00:00:12.480) or SMPTE timecode (00:00:12:12, frames at `fps`). CSV rows use the first column. */
+const numeric = (s: string) => /^\d+(\.\d+)?$/.test(s)
+
+/** One time: SMPTE timecode, seconds or a clock. Null when unreadable or out of range. */
+function shotTime(v: string, fps: number): number | null {
+  const m = v.match(/^(\d{1,2}):(\d{2}):(\d{2})(?::(\d{1,2})|;(\d{2}))$/)
+  if (!m) return numeric(v) ? Math.round(+v * 1000) : parseClock(v)
+  const frames = +(m[4] ?? m[5])
+  if (+m[2] > 59 || +m[3] > 59 || frames >= fps) return null
+  return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + Math.round(frames * 1000 / fps)
+}
+
+/**
+ * Shot list: one cut per line as seconds (12.48), a clock (00:00:12.480) or SMPTE timecode (00:00:12:12, frames at `fps`).
+ * CSV rows use the first column, or the start time column of a PySceneDetect scene list.
+ */
 export function parseShotList(text: string, fps = 24): { shots: number[]; bad: number[] } {
   const shots: number[] = [], bad: number[] = []
+  let column = -1
   lines(text).forEach((raw, i) => {
-    const v = raw.split(/[,;\t]/)[0].trim()
-    if (!v || /^[a-z#]/i.test(v)) return
-    const smpte = v.match(/^(\d{1,2}):(\d{2}):(\d{2})[:;](\d{1,2})$/)
-    const ms = smpte ? ((+smpte[1] * 60 + +smpte[2]) * 60 + +smpte[3]) * 1000 + Math.round(+smpte[4] * 1000 / fps)
-      : /^\d+(\.\d+)?$/.test(v) ? Math.round(+v * 1000)
-      : parseClock(v)
+    const cells = raw.split(/[,;\t]/).map(c => c.trim())
+    if (cells.includes('Scene Number') && cells.some(c => /^Start Time/.test(c))) {
+      column = cells.indexOf('Start Time (seconds)')
+      if (column < 0) column = cells.indexOf('Start Timecode')
+      return
+    }
+    const first = cells[0]
+    if (!first || /^[a-z#]/i.test(first)) return
+    let ms: number | null
+    if (column >= 0) {
+      ms = shotTime(cells[column] ?? '', fps)
+      if (ms === 0) return // the first scene starts with the video; that is not a cut
+    } else {
+      // The separators also occur inside times: drop-frame 00:00:12;12 and the comma clock 00:00:12,480.
+      const whole = raw.trim().match(/^(\d{1,2}:\d{2}:\d{2};\d{2}|(?:\d+:)?\d{1,2}:\d{2},\d{3})(?=$|[,;\t\s])/)?.[1]
+      // "12,48" may be a decimal comma, and a bare number before other numbers or times may be a row number.
+      const unclear = /^\d+$/.test(first) && raw.trim().startsWith(first + ',') && (numeric(cells[1]) || cells.slice(1).some(c => c.includes(':') && ![null, +first * 1000].includes(shotTime(c, fps))))
+      ms = unclear ? null : shotTime(whole ?? first, fps)
+    }
     if (ms === null || !Number.isFinite(ms)) bad.push(i + 1)
     else shots.push(ms)
   })

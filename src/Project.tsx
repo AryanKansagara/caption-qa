@@ -18,7 +18,8 @@ const Setup = lazy(() => import('./Setup.tsx'))
 const TAB_LABEL: Record<Tab, string> = { overview: 'QC overview', review: 'Review', fixes: 'Fixes', batch: 'Batch', history: 'History', export: 'Export', setup: 'Setup' }
 
 export const scoreClass = (s: number) => s >= 80 ? 'good' : s >= 50 ? 'mid' : 'bad'
-export const fmtT = (ms: number) => fmtTime(ms).slice(3, 11).replace(/^00:/, '0:')
+/** 0:12.34 or 05:03.20, with the hour from 1:00:00.00 on. */
+export const fmtT = (ms: number) => fmtTime(ms).slice(0, -1).replace(/^00:(00:)?/, (_, m) => m ? '0:' : '').replace(/^0(\d:\d\d:)/, '$1')
 export const plainText = (t: string) => t.replace(/<[^>]+>/g, '')
 
 /** Selected track, kept in the URL so links can point at one language. */

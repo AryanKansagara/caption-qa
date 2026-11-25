@@ -43,7 +43,7 @@ export default function Docs() {
         <p>Name files with a language code (<code>title_de.srt</code>, <code>title.es-ES.vtt</code>) and the language is set for you. Otherwise it is guessed from the text and you can change it.</p>
 
         <h2 id="shots">Shot lists</h2>
-        <p>One cut per line in seconds, clock time or SMPTE timecode; for CSV the first column is used. To get one from an edit or a scene detector:</p>
+        <p>One cut per line in seconds, clock time or SMPTE timecode; for CSV the first column is used, or the start time column of a PySceneDetect scene list. To get one from an edit or a scene detector:</p>
         <Code label="shell" code={'# PySceneDetect: writes a CSV of scene start times\nscenedetect -i movie.mp4 detect-content list-scenes\n\n# ffmpeg scene score: one cut time per line\nffmpeg -i movie.mp4 -vf "select=gt(scene\\,0.35),showinfo" -f null - 2>&1 | grep -o "pts_time:[0-9.]*" | cut -d: -f2 > cuts.txt'} />
         <p>Without a list, load the video on the Review tab and use <b>Scan for shot changes</b>: frames are sampled every 200 ms on a 64&times;36 canvas, big jumps in brightness are treated as cuts and each one is refined to about a frame. It is a basic scan; cross-fades and flashes can fool it, so an edit list is better when you have one.</p>
 
