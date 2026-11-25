@@ -208,7 +208,7 @@ function Shots({ p }: { p: Project }) {
   return (
     <div className="panel">
       <div className="panel-head"><h2>Shot changes</h2><span className="muted small">{p.shots.length} loaded</span></div>
-      <p className="muted small">Paste one cut per line: seconds (<code>12.48</code>), a clock (<code>00:00:12.480</code>) or SMPTE timecode (<code>00:00:12:12</code> at {fps} fps). CSV exports from an edit or a scene detector work; the first column is used. You can also scan the video for cuts on the Review tab.</p>
+      <p className="muted small">Paste one cut per line: seconds (<code>12.48</code>), a clock (<code>00:00:12.480</code>) or SMPTE timecode (<code>00:00:12:12</code> at {fps} fps). For CSV the first column is used, or the start times of a PySceneDetect scene list. You can also scan the video for cuts on the Review tab.</p>
       <textarea rows={6} value={text} onChange={e => setText(e.target.value)} placeholder={'00:00:03.790\n00:00:21.442\n00:00:37:06'} aria-label="Shot list" className="mono" />
       <div className="row gap-sm wrap mt-sm">
         <button type="button" className="btn primary sm" disabled={!text.trim()} onClick={() => apply(text)}>Load shot list</button>

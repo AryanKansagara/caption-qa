@@ -302,16 +302,44 @@ export function parseBytes(bytes: Uint8Array, fileName?: string, format?: Format
   return r
 }
 
-/** Shot list: one cut per line as seconds (12.48), a clock (00:00:12.480) or SMPTE timecode (00:00:12:12, frames at `fps`). CSV rows use the first column. */
+const numeric = (s: string) => /^\d+(\.\d+)?$/.test(s)
+
+/** One time: SMPTE timecode, seconds or a clock. Null when unreadable or out of range. */
+function shotTime(v: string, fps: number): number | null {
+  const m = v.match(/^(\d{1,2}):(\d{2}):(\d{2})(?::(\d{1,2})|;(\d{2}))$/)
+  if (!m) return numeric(v) ? Math.round(+v * 1000) : parseClock(v)
+  const frames = +(m[4] ?? m[5])
+  if (+m[2] > 59 || +m[3] > 59 || frames >= fps) return null
+  return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + Math.round(frames * 1000 / fps)
+}
+
+/**
+ * Shot list: one cut per line as seconds (12.48), a clock (00:00:12.480) or SMPTE timecode (00:00:12:12, frames at `fps`).
+ * CSV rows use the first column, or the start time column of a PySceneDetect scene list.
+ */
 export function parseShotList(text: string, fps = 24): { shots: number[]; bad: number[] } {
   const shots: number[] = [], bad: number[] = []
+  let column = -1
   lines(text).forEach((raw, i) => {
-    const v = raw.split(/[,;\t]/)[0].trim()
-    if (!v || /^[a-z#]/i.test(v)) return
-    const smpte = v.match(/^(\d{1,2}):(\d{2}):(\d{2})[:;](\d{1,2})$/)
-    const ms = smpte ? ((+smpte[1] * 60 + +smpte[2]) * 60 + +smpte[3]) * 1000 + Math.round(+smpte[4] * 1000 / fps)
-      : /^\d+(\.\d+)?$/.test(v) ? Math.round(+v * 1000)
-      : parseClock(v)
+    const cells = raw.split(/[,;\t]/).map(c => c.trim())
+    if (cells.includes('Scene Number') && cells.some(c => /^Start Time/.test(c))) {
+      column = cells.indexOf('Start Time (seconds)')
+      if (column < 0) column = cells.indexOf('Start Timecode')
+      return
+    }
+    const first = cells[0]
+    if (!first || /^[a-z#]/i.test(first)) return
+    let ms: number | null
+    if (column >= 0) {
+      ms = shotTime(cells[column] ?? '', fps)
+      if (ms === 0) return // the first scene starts with the video; that is not a cut
+    } else {
+      // The separators also occur inside times: drop-frame 00:00:12;12 and the comma clock 00:00:12,480.
+      const whole = raw.trim().match(/^(\d{1,2}:\d{2}:\d{2};\d{2}|(?:\d+:)?\d{1,2}:\d{2},\d{3})(?=$|[,;\t\s])/)?.[1]
+      // "12,48" may be a decimal comma, and a bare number before other numbers or times may be a row number.
+      const unclear = /^\d+$/.test(first) && raw.trim().startsWith(first + ',') && (numeric(cells[1]) || cells.slice(1).some(c => c.includes(':') && ![null, +first * 1000].includes(shotTime(c, fps))))
+      ms = unclear ? null : shotTime(whole ?? first, fps)
+    }
     if (ms === null || !Number.isFinite(ms)) bad.push(i + 1)
     else shots.push(ms)
   })
