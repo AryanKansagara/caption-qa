@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { RULES, ruleLabel } from './engine/check.ts'
 import { langName } from './engine/rules.ts'
 import { FORMAT_LABEL } from './engine/types.ts'
-import { fmtT, issuesCsv, plainText, scoreClass, summaryCsv } from './Project.tsx'
-import { getProfile, isCustom, useProject, useQC } from './projectData.ts'
+import { fmtT, issuesCsv, ParseReport, plainText, scoreClass, summaryCsv } from './Project.tsx'
+import { getProfile, importErrors, isCustom, lostOnImport, useProject, useQC } from './projectData.ts'
 import { download, Link, NotFound } from './ui.tsx'
 
 export default function Report({ id }: { id: string }) {
@@ -37,7 +37,7 @@ export default function Report({ id }: { id: string }) {
       <table className="report-table">
         <thead><tr><th>Track</th><th>File</th><th className="num">Cues</th><th className="num">Score</th><th className="num">Errors</th><th className="num">Warnings</th><th>Result</th></tr></thead>
         <tbody>{qc.map(q => (
-          <tr key={q.track.id}><th>{langName(q.track.lang)} <small>{q.track.role}</small></th><td className="small">{q.track.fileName}<br /><span className="muted">{FORMAT_LABEL[q.track.format]}</span></td><td className="num">{q.track.cues.length}</td><td className="num"><b>{q.score}</b></td><td className="num">{q.errors}</td><td className="num">{q.warnings}</td><td><span className={`badge ${q.errors ? 'severe' : 'low'}`}>{q.errors ? 'Fail' : 'Pass'}</span></td></tr>
+          <tr key={q.track.id}><th>{langName(q.track.lang)} <small>{q.track.role}</small></th><td className="small">{q.track.fileName}<br /><span className="muted">{FORMAT_LABEL[q.track.format]}</span></td><td className="num">{q.track.cues.length}</td><td className="num"><b>{q.score}</b></td><td className="num">{q.errors}</td><td className="num">{q.warnings}</td><td><span className={`badge ${q.errors || lostOnImport(q.track) ? 'severe' : 'low'}`}>{q.errors ? 'Fail' : lostOnImport(q.track) ? 'Incomplete import' : 'Pass'}</span>{importErrors(q.track).length > 0 && <div className="error small">{importErrors(q.track).length} import error{importErrors(q.track).length === 1 ? '' : 's'}</div>}</td></tr>
         ))}</tbody>
       </table>
 
@@ -54,6 +54,10 @@ export default function Report({ id }: { id: string }) {
         <section key={q.track.id} className="report-track">
           <h2>{langName(q.track.lang)} · {q.issues.length} issue{q.issues.length === 1 ? '' : 's'} <span className={`score-chip ${scoreClass(q.score)}`}>{q.score}</span></h2>
           {q.expansion !== null && <p className="small muted">Length against source: {q.expansion >= 1 ? '+' : ''}{Math.round((q.expansion - 1) * 100)}%.</p>}
+          {importErrors(q.track).length > 0 && <>
+            <p className="error small">Errors while reading {q.track.fileName}{lostOnImport(q.track) ? ': cues may be missing, so the result below covers only what could be read' : ' (as delivered)'}.</p>
+            <ParseReport issues={importErrors(q.track)} />
+          </>}
           {q.issues.length === 0 ? <p className="good-text">No issues.</p> : (
             <table className="report-table issues">
               <thead><tr><th>#</th><th>In</th><th>Rule</th><th>Finding</th><th>Text</th></tr></thead>

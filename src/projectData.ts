@@ -46,6 +46,10 @@ export function qcTrack(p: Project, t: Track): TrackQC {
   }
 }
 
+/** Errors found while reading the file. Timing errors are also checked on the cues; the others mean cues were lost or misread. */
+export const importErrors = (t: Track) => t.parseIssues.filter(i => i.severity === 'error')
+export const lostOnImport = (t: Track) => importErrors(t).some(i => i.kind !== 'overlap' && i.kind !== 'negative')
+
 export const useQC = (p: Project | null | undefined) => useMemo(() => p ? p.tracks.map(t => qcTrack(p, t)) : [], [p])
 
 export function useProject(id: string) {

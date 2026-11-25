@@ -172,11 +172,29 @@ test.fail('#20 a cue that starts exactly on a cut is left there', async ({ page 
   expect(await issues(page)).toEqual([])
 })
 
-test.fail('#21 the report says when cues were lost on import', async ({ page }) => {
+test('#21 the report says when cues were lost on import', async ({ page }) => {
   await project(page, 'a_en.srt', '1\n00:00:01,000 --> 00:00:03,000\nOne\n\n2\n00:00:0X,000 --> 00:00:06,000\nLost\n', 'Export')
   await page.getByRole('link', { name: 'Open printable report' }).click()
   await expect(page.getByRole('heading', { name: 'Pass / fail per rule' })).toBeVisible()
   expect(await page.locator('.report').textContent()).toMatch(/Unreadable timecode|skipped/i)
+  const row = page.locator('.report-table').first().locator('tbody tr')
+  await expect(row.locator('.badge')).toHaveText('Incomplete import')
+  await expect(row).toContainText('1 import error')
+  await expect(page.locator('.report .parse-report li')).toHaveText(['Line 6timecodeUnreadable timecode "00:00:0X,000 --> 00:00:06,000". Cue skipped.'])
+  const sum = await downloaded(page, () => page.getByRole('button', { name: 'Summary CSV' }).click())
+  const cells = sum.text.trim().split('\n').map((l) => l.split(','))
+  expect(cells.map((c) => c.at(-1))).toEqual(['import-errors', '1'])
+})
+
+test('#21 timing errors that were read do not hide a pass, and clean files are unchanged', async ({ page }) => {
+  await newProject(page)
+  await importFiles(page, ['a_en.srt', srt([1000, 2900, 'One fine day'], [3000, 5000, 'Two'])], ['b_de.srt', srt([1000, 3500, 'Ein guter Tag'], [3000, 5000, 'Zwei'])])
+  await acceptAll(page)
+  await page.getByRole('link', { name: 'QC report' }).click()
+  const rows = page.locator('.report-table').first().locator('tbody tr')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('td').last()).toHaveText('Pass')
+  await expect(rows.nth(1).locator('td').last()).toHaveText('Pass1 import error')
 })
 
 test.fail('#22 compare lists every track of a language', async ({ page }) => {
