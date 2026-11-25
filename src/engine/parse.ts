@@ -333,6 +333,7 @@ export function parse(text: string, format?: Format | null, fileName?: string): 
   const sorted = sortByStart(r.cues, r.lineOf)
   if (sorted.lineOf.some((l, i) => l !== r.lineOf[i])) timing.push({ line: 0, kind: 'format', severity: 'warn', message: 'Cues were out of order and have been sorted by start time.' })
   ensureIds(sorted.cues)
+  if (!sorted.cues.length && !r.issues.some(i => i.severity === 'error')) r.issues.push({ line: 1, kind: 'format', severity: 'error', message: 'No cues found in this file.' })
   const issues = [...r.issues, ...timing].sort((a, b) => a.line - b.line)
   return { format: fmt, cues: sorted.cues, issues, frameRate: 'frameRate' in r ? r.frameRate as number : undefined }
 }
