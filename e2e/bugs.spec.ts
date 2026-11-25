@@ -168,7 +168,7 @@ test('#19 ASS drawings are not subtitle text', async ({ page }) => {
   expect(await pending(page, 'a_en.ass').textContent()).toContain('1 cues')
 })
 
-test.fail('#20 a cue that starts exactly on a cut is left there', async ({ page }) => {
+test('#20 a cue that starts exactly on a cut is left there', async ({ page }) => {
   await project(page, 'a_en.srt', srt([5000, 7000, 'On the cut here']))
   await page.getByLabel('Shot list').fill('5\n5.25')
   await page.getByRole('button', { name: 'Load shot list' }).click()

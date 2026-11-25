@@ -1,4 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
+import { offCuts } from './shots.ts'
 import { breakProblem, cps, lineChars, plain, TAG, textChars, weakEnd, wordCount, wpm } from './text.ts'
 import { lastOnScreen, type Cue } from './types.ts'
 
@@ -170,14 +171,10 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
     }
 
     if (r.shotChangeFrames > 0 && shots.length) {
-      const w = r.shotChangeFrames * f
-      for (const s of shots) {
-        if (s < c.start - w) continue
-        if (s > c.end + w) break
-        const dIn = c.start - s, dOut = s - c.end
-        if (Math.abs(dIn) > f / 2 && Math.abs(dIn) < w) { add('shot-change', c, 'warn', `Starts ${Math.round(Math.abs(dIn) / f)} frames ${dIn > 0 ? 'after' : 'before'} a shot change; snap it to the cut.`); break }
-        if (Math.abs(dOut) > minGap + f / 2 && Math.abs(dOut) < w) { add('shot-change', c, 'warn', `Ends ${Math.round(Math.abs(dOut) / f)} frames ${dOut > 0 ? 'before' : 'after'} a shot change; end ${r.minGapFrames} frames before the cut.`); break }
-      }
+      const cut = offCuts(c, shots, r)
+      const dIn = c.start - (cut.start ?? 0), dOut = (cut.end ?? 0) - c.end
+      if (cut.start !== undefined) add('shot-change', c, 'warn', `Starts ${Math.round(Math.abs(dIn) / f)} frames ${dIn > 0 ? 'after' : 'before'} a shot change; snap it to the cut.`)
+      else if (cut.end !== undefined) add('shot-change', c, 'warn', `Ends ${Math.round(Math.abs(dOut) / f)} frames ${dOut > 0 ? 'before' : 'after'} a shot change; end ${r.minGapFrames} frames before the cut.`)
     }
 
     const bad = [...p].filter(ch => r.forbiddenChars.includes(ch) || /[\u0000-\u0008\u000b-\u001f\u007f�]/.test(ch))

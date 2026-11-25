@@ -1,4 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
+import { offCuts } from './shots.ts'
 import { breakProblem, lineChars, plain, rebreak, TAG, textChars, wordCount } from './text.ts'
 import { lastOnScreen, type Cue } from './types.ts'
 
@@ -129,16 +130,14 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
     if (rb !== c.text && fits(rb, r) && breakProblem(c.text, r.maxChars, r.maxLines, ctx.lang, r.halfWidthLatin)) push('rebreak', rb.includes('\n') ? 'Balance the two lines and keep short words with their nouns.' : 'Fits on one line.', [c], [{ ...c, text: rb }])
 
     if (r.shotChangeFrames > 0 && shots.length) {
-      const w = r.shotChangeFrames * f
-      const sIn = shots.find(s => Math.abs(c.start - s) > f / 2 && Math.abs(c.start - s) < w)
+      const { start: sIn, end: sOut } = offCuts(c, shots, r)
       const prevOk = sIn !== undefined && (!prev || prev.end <= sIn - minGap || adjacent && sIn - minGap - prev.start >= r.minDurationMs)
       if (sIn !== undefined && prevOk && c.end - sIn >= r.minDurationMs) {
         const note = `Move the in-time to the shot change at ${(sIn / 1000).toFixed(2)} s.`
         if (prev && prev.end > sIn - minGap) push('snap', note + ` The previous cue now ends ${r.minGapFrames} frames before the cut.`, [prev, c], [{ ...prev, end: round(sIn - minGap) }, { ...c, start: round(sIn) }])
         else push('snap', note, [c], [{ ...c, start: round(sIn) }])
       } else {
-        const sOut = shots.find(s => Math.abs(c.end - (s - minGap)) > f / 2 && Math.abs(c.end - s) < w && s > c.start + r.minDurationMs)
-        if (sOut !== undefined) {
+        if (sOut !== undefined && sOut > c.start + r.minDurationMs) {
           const ne = round(sOut - minGap)
           const ok = ne > c.end ? (!next || next.start >= sOut) : ne - c.start >= need - f
           if (ok) push('snap', `End ${r.minGapFrames} frames before the shot change at ${(sOut / 1000).toFixed(2)} s.`, [c], [{ ...c, end: ne }])
