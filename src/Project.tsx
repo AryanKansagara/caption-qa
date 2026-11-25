@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { TABS, type Tab } from './App.tsx'
 import { RULES, ruleLabel, type RuleId } from './engine/check.ts'
+import { toCsv } from './engine/csv.ts'
 import { autoFix } from './engine/fix.ts'
 import { fmtTime } from './engine/parse.ts'
 import { langName } from './engine/rules.ts'
@@ -391,7 +392,6 @@ const Delta = ({ v, good }: { v: number; good: 'up' | 'down' }) => !v ? null : <
 // ---------- Export ----------
 
 export function issuesCsv(qc: TrackQC[]) {
-  const esc = (s: string | number) => /[",\n]/.test(String(s)) ? `"${String(s).replace(/"/g, '""')}"` : String(s)
   const rows = [['language', 'role', 'file', 'cue', 'start', 'end', 'rule', 'severity', 'message', 'text']]
   for (const q of qc) {
     const idx = new Map(q.track.cues.map((c, i) => [c.id, i]))
@@ -400,13 +400,13 @@ export function issuesCsv(qc: TrackQC[]) {
       rows.push([q.track.lang, q.track.role, q.track.fileName, String(idx.get(i.cueId)! + 1), fmtTime(c.start), fmtTime(c.end), i.rule, i.severity, i.message, plainText(c.text).replace(/\n/g, ' / ')])
     }
   }
-  return rows.map(r => r.map(esc).join(',')).join('\n') + '\n'
+  return toCsv(rows)
 }
 
 export function summaryCsv(qc: TrackQC[]) {
   const rows = [['language', 'role', 'file', 'cues', 'score', ...RULES.map(r => r.id)]]
   for (const q of qc) rows.push([q.track.lang, q.track.role, q.track.fileName, String(q.track.cues.length), String(q.score), ...RULES.map(r => { const s = q.summary.find(x => x.id === r.id); return s ? `${s.pass ? 'pass' : 'fail'} (${s.errors}e/${s.warnings}w)` : 'n/a' })])
-  return rows.map(r => r.join(',')).join('\n') + '\n'
+  return toCsv(rows)
 }
 
 const baseName = (f: string) => f.replace(/\.[^.]+$/, '')
