@@ -1,7 +1,7 @@
 import { card, choose, downloaded, expect, exportAs, importFiles, issues, newProject, pending, srt, tab, test, toasts, type Tab } from './fixtures.ts'
 import type { Page } from '@playwright/test'
 
-// Known bugs, pinned with `test.fail`. The fix for an issue turns its test into a normal one.
+// Regression tests, one or more per issue. A newly found bug is pinned with `test.fail` until it is fixed.
 // Everything before the last assertions waits as usual; the last ones are immediate reads of a settled page.
 
 const EV = '[Script Info]\nScriptType: v4.00+\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n'
@@ -226,10 +226,13 @@ test('#22 compare lists every track of a language', async ({ page }) => {
   await expect(page.locator('.diff-table tbody tr')).toContainText(['Neues Schild'])
 })
 
-test.fail('#23 closing a gap does not push a cue over the maximum duration', async ({ page }) => {
-  await project(page, 'a_en.srt', srt([0, 6900, 'Hello there everyone in the room'], [7300, 9000, 'Bye now']))
+test('#23 closing a gap does not push a cue over the maximum duration', async ({ page }) => {
+  // The second pair has room, so there is something to accept.
+  await project(page, 'a_en.srt', srt([0, 6900, 'Hello there everyone in the room'], [7300, 9000, 'Bye now'], [9400, 11000, 'See you soon']))
   await acceptAll(page)
-  expect((await exportAs(page, 'English', 'srt')).text).toContain('Hello there everyone in the room')
+  const { text } = await exportAs(page, 'English', 'srt')
+  expect(text).toContain('Hello there everyone in the room')
+  expect(times(text)).toEqual(['00:00:00,000 --> 00:00:06,900', '00:00:07,300 --> 00:00:09,317', '00:00:09,400 --> 00:00:11,000'])
 })
 
 /** Shot changes as stored, read from the project JSON. */
