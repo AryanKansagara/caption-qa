@@ -88,7 +88,7 @@ test('#8 text in angle brackets survives export', async ({ page }) => {
   expect((await exportAs(page, 'French', 'sbv')).text).toContain('<<Bonjour>> dit-il')
 })
 
-test.fail('#9 an empty line inside a cue does not cut the exported cue', async ({ page }) => {
+test('#9 an empty line inside a cue does not cut the exported cue', async ({ page }) => {
   await project(page, 'a_en.ass', `${EV}Dialogue: 0,0:00:01.00,0:00:03.00,D,,0,0,0,,One\\N\\NTwo\n`)
   expect((await exportAs(page, 'English', 'srt')).text).not.toContain('One\n\nTwo')
 })
