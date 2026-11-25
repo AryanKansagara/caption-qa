@@ -147,7 +147,7 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
 
     if (next && r.closeGapFrames > 0) {
       const gap = next.start - c.end
-      if (gap > minGap + 1 && gap < r.closeGapFrames * f - 1) push('chain', `Close the ${Math.round(gap / f)}-frame gap to ${r.minGapFrames} frames.`, [c], [{ ...c, end: round(next.start - minGap) }])
+      if (gap > minGap + 1 && gap < r.closeGapFrames * f - 1 && next.start - minGap - c.start <= r.maxDurationMs) push('chain', `Close the ${Math.round(gap / f)}-frame gap to ${r.minGapFrames} frames.`, [c], [{ ...c, end: round(next.start - minGap) }])
     }
 
     if (dur < need - 1) {
