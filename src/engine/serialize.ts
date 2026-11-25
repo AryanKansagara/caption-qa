@@ -17,6 +17,20 @@ function vttText(s: string) {
   return out + xmlEscape(s.slice(at))
 }
 
+/** TTML content of a cue: one span per italic run, closed at the end of the cue. Other tags and characters XML cannot hold are dropped. */
+function ttmlText(text: string) {
+  const s = text.replace(/\r\n?/g, '\n').replace(/[^\t\n\x20-\ud7ff\ue000-\ufffd\u{10000}-\u{10ffff}]/gu, '')
+  let out = '', at = 0, depth = 0
+  const escaped = (t: string) => xmlEscape(t).replace(/\n/g, '<br/>')
+  for (const m of s.matchAll(TAG)) {
+    out += escaped(s.slice(at, m.index))
+    at = m.index + m[0].length
+    if (m[2]?.toLowerCase() !== 'i' || m[0].endsWith('/>')) continue
+    if (!m[1]) { if (!depth++) out += '<span tts:fontStyle="italic">' } else if (depth && !--depth) out += '</span>'
+  }
+  return out + escaped(s.slice(at)) + (depth ? '</span>' : '')
+}
+
 function assClock(ms: number) {
   const cs = Math.round(Math.max(0, ms) / 10)
   const h = Math.floor(cs / 360000), m = Math.floor(cs / 6000) % 60, s = Math.floor(cs / 100) % 60
@@ -45,10 +59,7 @@ export function serialize(cues: Cue[], format: Format, opts: { lang?: string; ti
       return head + body + '\n'
     }
     case 'ttml': {
-      const ps = cues.map(c => {
-        const inner = c.text.split('\n').map(l => xmlEscape(l).replace(/&lt;i&gt;/g, '<span tts:fontStyle="italic">').replace(/&lt;\/i&gt;/g, '</span>').replace(/&lt;\/?[bu]&gt;/g, '')).join('<br/>')
-        return `      <p begin="${fmtTime(c.start)}" end="${fmtTime(c.end)}">${inner}</p>`
-      }).join('\n')
+      const ps = cues.map(c => `      <p begin="${fmtTime(c.start)}" end="${fmtTime(c.end)}">${ttmlText(c.text)}</p>`).join('\n')
       return `<?xml version="1.0" encoding="UTF-8"?>\n<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xml:lang="${opts.lang ?? 'en'}">\n  <body>\n    <div>\n${ps}\n    </div>\n  </body>\n</tt>\n`
     }
   }
