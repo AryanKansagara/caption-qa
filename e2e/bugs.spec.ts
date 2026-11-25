@@ -36,7 +36,7 @@ test.fail('#3 a cue after a missing blank line is not swallowed', async ({ page 
   expect(await pending(page, 'b_en.vtt').textContent()).toContain('2 cues')
 })
 
-test.fail('#4 re-breaking Korean keeps the spaces between words', async ({ page }) => {
+test('#4 re-breaking Korean keeps the spaces between words', async ({ page }) => {
   await project(page, 'a_ko.srt', srt([1000, 5000, '안녕하세요\n여러분']))
   await acceptAll(page)
   expect((await exportAs(page, 'Korean', 'srt')).text).toContain('안녕하세요 여러분\n')
