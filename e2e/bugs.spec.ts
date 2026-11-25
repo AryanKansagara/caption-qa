@@ -118,7 +118,7 @@ test.fail('#13 TTML export is well-formed when italics are never closed', async 
   expect(await page.evaluate((t) => new DOMParser().parseFromString(t, 'application/xml').querySelector('parsererror') !== null, text)).toBe(false)
 })
 
-test.fail('#14 CSV cells cannot run as formulas and file names are quoted', async ({ page }) => {
+test('#14 CSV cells cannot run as formulas and file names are quoted', async ({ page }) => {
   await project(page, 'a, final_en.srt', srt([1000, 3000, '=HYPERLINK("http://x.test";"★")']), 'Export')
   const csv = await downloaded(page, () => page.getByRole('button', { name: 'Issues CSV' }).click())
   const sum = await downloaded(page, () => page.getByRole('button', { name: 'Summary CSV' }).click())
