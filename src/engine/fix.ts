@@ -1,6 +1,6 @@
 import { frameMs, type Rules } from './rules.ts'
 import { breakProblem, lineChars, plain, rebreak, textChars, wordCount } from './text.ts'
-import type { Cue } from './types.ts'
+import { lastOnScreen, type Cue } from './types.ts'
 
 export type FixKind = 'overlap' | 'gap' | 'split' | 'rebreak' | 'snap' | 'chain' | 'extend' | 'merge'
 export const FIX_LABEL: Record<FixKind, string> = { overlap: 'Fix overlap', gap: 'Restore minimum gap', split: 'Split long cue', rebreak: 'Re-break lines', snap: 'Snap to shot change', chain: 'Close short gap', extend: 'Extend for reading speed', merge: 'Merge flashing cue' }
@@ -62,12 +62,16 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
     out.push({ key, kind, note, before, after })
   }
 
+  const before = lastOnScreen(cues)
   cues.forEach((c, i) => {
-    const prev = cues[i - 1], next = cues[i + 1]
+    // The earlier cue that stays on screen longest; only when it is the neighbour can both be changed together.
+    const prev = cues[before[i]], next = cues[i + 1]
+    const adjacent = before[i] === i - 1
     const need = needMs(c, r, ctx.lang)
 
     // Overlaps (the classic broken .ass conversion): trim the earlier cue, or push this one later if trimming would flash.
-    if (prev && c.start < prev.end) {
+    // When `prev` is not the neighbour, the cue right after it overlaps it too and that fix comes first.
+    if (prev && adjacent && c.start < prev.end) {
       const trimmed = c.start - minGap
       if (trimmed - prev.start >= r.minDurationMs) push('overlap', `End the previous cue ${r.minGapFrames} frames before this one starts.`, [prev, c], [{ ...prev, end: round(trimmed) }, c])
       else {
@@ -76,7 +80,7 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
       }
       return
     }
-    if (prev && c.start - prev.end < minGap - 1) {
+    if (prev && c.start >= prev.end && c.start - prev.end < minGap - 1) {
       push('gap', `Leave ${r.minGapFrames} frames between cues.`, [prev], [{ ...prev, end: round(c.start - minGap) }])
     }
 
@@ -104,7 +108,7 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
     if (r.shotChangeFrames > 0 && shots.length) {
       const w = r.shotChangeFrames * f
       const sIn = shots.find(s => Math.abs(c.start - s) > f / 2 && Math.abs(c.start - s) < w)
-      const prevOk = sIn !== undefined && (!prev || prev.end <= sIn - minGap || sIn - minGap - prev.start >= r.minDurationMs)
+      const prevOk = sIn !== undefined && (!prev || prev.end <= sIn - minGap || adjacent && sIn - minGap - prev.start >= r.minDurationMs)
       if (sIn !== undefined && prevOk && c.end - sIn >= r.minDurationMs) {
         const note = `Move the in-time to the shot change at ${(sIn / 1000).toFixed(2)} s.`
         if (prev && prev.end > sIn - minGap) push('snap', note + ` The previous cue now ends ${r.minGapFrames} frames before the cut.`, [prev, c], [{ ...prev, end: round(sIn - minGap) }, { ...c, start: round(sIn) }])

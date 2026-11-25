@@ -6,6 +6,15 @@ export interface Cue {
   text: string
 }
 
+/** For each cue of a list sorted by start: the index of the earlier cue that stays on screen longest, -1 for the first. */
+export function lastOnScreen(cues: Cue[]): number[] {
+  let at = -1
+  return cues.map((_, i) => {
+    if (i && (at < 0 || cues[i - 1].end >= cues[at].end)) at = i - 1
+    return at
+  })
+}
+
 export type Format = 'srt' | 'vtt' | 'ass' | 'ttml' | 'sbv'
 
 export interface ParseIssue {
