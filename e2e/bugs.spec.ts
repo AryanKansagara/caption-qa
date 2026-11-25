@@ -99,7 +99,7 @@ test.fail('#10 splitting an italic cue keeps both halves balanced', async ({ pag
   expect((await exportAs(page, 'English', 'srt')).text).toContain('far too long.</i>')
 })
 
-test.fail('#11 auto-fix never ends a cue before it starts', async ({ page }) => {
+test('#11 auto-fix never ends a cue before it starts', async ({ page }) => {
   const long = 'Aaaa bbbb cccc dddd eeee ffff gggg hhhh iii'
   await project(page, 'a_en.srt', srt([0, 990, 'Some text here'], [1000, 1050, 'Short but with quite a lot of words here'], [1060, 3000, `${long.slice(0, 40)}\n${long.slice(0, 40)}`]))
   await acceptAll(page)
