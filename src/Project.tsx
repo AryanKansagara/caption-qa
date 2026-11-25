@@ -5,6 +5,7 @@ import { autoFix } from './engine/fix.ts'
 import { fmtTime } from './engine/parse.ts'
 import { langName } from './engine/rules.ts'
 import { serialize } from './engine/serialize.ts'
+import { stripTags } from './engine/text.ts'
 import { FORMAT_EXT, FORMAT_LABEL, type Cue, type Format } from './engine/types.ts'
 import { getProfile, isCustom, qcTrack, snapshotOf, undoDepth, undoLabel, undoTracks, updateTracks, useProject, useQC, type TrackQC } from './projectData.ts'
 import { getDefaults, saveProject, type Project, type Snapshot } from './store.ts'
@@ -20,7 +21,7 @@ const TAB_LABEL: Record<Tab, string> = { overview: 'QC overview', review: 'Revie
 export const scoreClass = (s: number) => s >= 80 ? 'good' : s >= 50 ? 'mid' : 'bad'
 /** 0:12.34 or 05:03.20, with the hour from 1:00:00.00 on. */
 export const fmtT = (ms: number) => fmtTime(ms).slice(0, -1).replace(/^00:(00:)?/, (_, m) => m ? '0:' : '').replace(/^0(\d:\d\d:)/, '$1')
-export const plainText = (t: string) => t.replace(/<[^>]+>/g, '')
+export const plainText = stripTags
 
 /** Selected track, kept in the URL so links can point at one language. */
 export function useTrackParam(p: Project): [string, (id: string) => void] {

@@ -4,7 +4,7 @@ import { applyChange, autoFix, FIX_LABEL, type Change } from './engine/fix.ts'
 import { parse } from './engine/parse.ts'
 import { PROFILES, rulesFor } from './engine/rules.ts'
 import { SAMPLE_FILES, SAMPLE_SHOTS } from './engine/sample.ts'
-import { cps } from './engine/text.ts'
+import { cps, stripTags } from './engine/text.ts'
 import type { Cue } from './engine/types.ts'
 import { Screen, synthPeaks, Timeline } from './Timeline.tsx'
 import { Link } from './ui.tsx'
@@ -90,7 +90,7 @@ function Hero() {
             <span className="chip-dark">DE · 24 fps · Netflix-style</span>
             {focus && <span className={`chip-dark ${cps(focus.text, focus.end - focus.start) > RULES.maxCps ? 'hot' : 'cool'}`}>{cps(focus.text, focus.end - focus.start).toFixed(1)} CPS / {RULES.maxCps}</span>}
           </div>
-          {srcCue && <div className="screen-src">EN: {srcCue.text.replace(/<[^>]+>/g, '').replace(/\n/g, ' ')}</div>}
+          {srcCue && <div className="screen-src">EN: {stripTags(srcCue.text).replace(/\n/g, ' ')}</div>}
         </Screen>
         <div className="demo-score">
           <div className={`score-ring${s >= 60 ? ' good' : s >= 30 ? ' mid' : ''}`} style={{ '--p': s } as React.CSSProperties}>

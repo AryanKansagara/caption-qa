@@ -83,7 +83,7 @@ test('#7 times after the first hour keep their hour', async ({ page }) => {
   await expect(page.locator('.report-table.issues tbody td').nth(1)).toHaveText('1:05:03.20')
 })
 
-test.fail('#8 text in angle brackets survives export', async ({ page }) => {
+test('#8 text in angle brackets survives export', async ({ page }) => {
   await project(page, 'a_fr.srt', srt([1000, 3000, '<<Bonjour>> dit-il']))
   expect((await exportAs(page, 'French', 'sbv')).text).toContain('<<Bonjour>> dit-il')
 })
