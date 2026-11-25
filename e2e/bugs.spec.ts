@@ -59,10 +59,14 @@ test.fail('#6 a cleared rule field does not become 0', async ({ page }) => {
   expect(await issues(page)).toEqual([])
 })
 
-test.fail('#7 times after the first hour keep their hour', async ({ page }) => {
+test('#7 times after the first hour keep their hour', async ({ page }) => {
   await project(page, 'a_en.srt', srt([3903200, 3905200, 'One ★']), 'QC overview')
   await expect(page.locator('.issue-time')).toHaveCount(1)
   expect(await page.locator('.issue-time').textContent()).toBe('#1 · 1:05:03.20')
+  await tab(page, 'Review')
+  expect(await page.locator('table.sbs tbody td').nth(1).textContent()).toBe('1:05:03.201:05:05.20')
+  await page.getByRole('link', { name: 'QC report' }).click()
+  await expect(page.locator('.report-table.issues tbody td').nth(1)).toHaveText('1:05:03.20')
 })
 
 test.fail('#8 text in angle brackets survives export', async ({ page }) => {
