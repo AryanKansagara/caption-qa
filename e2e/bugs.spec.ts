@@ -112,7 +112,7 @@ test('#12 a cue under a long earlier cue is an overlap', async ({ page }) => {
   expect((await issues(page)).filter((i) => i.includes('Overlaps')).map((i) => i.slice(0, 2))).toEqual(['#2', '#3'])
 })
 
-test.fail('#13 TTML export is well-formed when italics are never closed', async ({ page }) => {
+test('#13 TTML export is well-formed when italics are never closed', async ({ page }) => {
   await project(page, 'a_en.srt', srt([1000, 3000, '<i>Open italics']))
   const { text } = await exportAs(page, 'English', 'ttml')
   expect(await page.evaluate((t) => new DOMParser().parseFromString(t, 'application/xml').querySelector('parsererror') !== null, text)).toBe(false)
