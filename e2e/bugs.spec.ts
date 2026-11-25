@@ -147,7 +147,7 @@ test('#16 a long track with one error does not score 100', async ({ page }) => {
   expect(await card(page, 'English')).toBe('99 | a_en.srt · 300 cues | 1 errors · 0 warnings')
 })
 
-test.fail('#17 a file without cues is not called cleanly read', async ({ page }) => {
+test('#17 a file without cues is not called cleanly read', async ({ page }) => {
   await newProject(page)
   await choose(page, ['empty.srt', ''])
   await expect(pending(page, 'empty.srt')).toContainText('No cues could be read')
