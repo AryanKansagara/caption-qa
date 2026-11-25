@@ -93,7 +93,7 @@ test('#9 an empty line inside a cue does not cut the exported cue', async ({ pag
   expect((await exportAs(page, 'English', 'srt')).text).not.toContain('One\n\nTwo')
 })
 
-test.fail('#10 splitting an italic cue keeps both halves balanced', async ({ page }) => {
+test('#10 splitting an italic cue keeps both halves balanced', async ({ page }) => {
   await project(page, 'a_en.srt', srt([1000, 10000, '<i>This cue stays on screen far too long. Nobody should read one subtitle for nine seconds.</i>']))
   await acceptAll(page)
   expect((await exportAs(page, 'English', 'srt')).text).toContain('far too long.</i>')

@@ -1,5 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
-import { breakProblem, lineChars, plain, rebreak, textChars, wordCount } from './text.ts'
+import { breakProblem, lineChars, plain, rebreak, TAG, textChars, wordCount } from './text.ts'
 import { lastOnScreen, type Cue } from './types.ts'
 
 export type FixKind = 'overlap' | 'gap' | 'split' | 'rebreak' | 'snap' | 'chain' | 'extend' | 'merge'
@@ -31,21 +31,44 @@ export function needMs(c: Cue, r: Rules, lang: string) {
 
 const fits = (text: string, r: Rules) => { const l = text.split('\n'); return l.length <= r.maxLines && l.every(x => lineChars(x, r.halfWidthLatin) <= r.maxChars) }
 
+/** The text on both sides of `at`; tags open there are closed in the first half and opened again in the second. */
+function cutAt(flat: string, at: number): [string, string] {
+  const open: { name: string; tag: string }[] = []
+  for (const m of flat.slice(0, at).matchAll(TAG)) {
+    const name = (m[2] ?? m[3] ?? m[4])?.toLowerCase()
+    if (!name || name === 'br' || m[0].endsWith('/>')) continue
+    if (!m[1]) open.push({ name, tag: m[0] })
+    else {
+      const k = open.findLastIndex(o => o.name === name)
+      if (k >= 0) open.splice(k, 1)
+    }
+  }
+  let a = flat.slice(0, at).trim() + open.map(o => `</${o.name}>`).reverse().join('')
+  let b = open.map(o => o.tag).join('') + flat.slice(at).trim()
+  for (const { name, tag } of open.reverse()) {
+    if (a.includes(tag + `</${name}>`)) a = a.replace(tag + `</${name}>`, '').trim()
+    if (b.startsWith(tag + `</${name}>`)) b = b.replace(tag + `</${name}>`, '').trim()
+  }
+  return [a, b]
+}
+
 function splitText(text: string): [string, string] | null {
   const flat = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
   const mid = flat.length / 2
+  const tags = [...flat.matchAll(TAG)].map(m => [m.index, m.index + m[0].length])
   let best = -1, bestD = Infinity
   // Prefer sentence ends, then commas, then any space; closest to the middle wins within each tier.
   for (const re of [/[.!?…]\s/g, /[,;:]\s/g, /\s/g]) {
     for (const m of flat.matchAll(re)) {
       const at = m.index! + m[0].length - 1
       const d = Math.abs(at - mid)
-      if (d < bestD && at > 3 && at < flat.length - 3) { bestD = d; best = at }
+      if (d < bestD && at > 3 && at < flat.length - 3 && !tags.some(([s, e]) => at > s && at < e)) { bestD = d; best = at }
     }
     if (best >= 0 && bestD < flat.length * 0.3) break
   }
   if (best < 0) return null
-  return [flat.slice(0, best).trim(), flat.slice(best).trim()]
+  const parts = cutAt(flat, best)
+  return parts.every(x => plain(x).trim()) ? parts : null
 }
 
 export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<string> = new Set()): Change[] {
@@ -90,7 +113,7 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
       const parts = splitText(c.text)
       if (parts) {
         const [a, b] = parts
-        const at = c.start + dur * (a.length / (a.length + b.length))
+        const at = c.start + dur * (plain(a).length / (plain(a).length + plain(b).length))
         const endA = round(at - minGap / 2), startB = round(at + minGap / 2)
         if (endA > c.start && startB < c.end) {
           push('split', 'Split into two cues at the most natural break, timed by length.', [c], [
