@@ -2,6 +2,7 @@ import { useMemo, useRef, type PointerEvent as RPointerEvent } from 'react'
 import type { Issue } from './engine/check.ts'
 import type { Cue } from './engine/types.ts'
 
+import { stripTags } from './engine/text.ts'
 export interface Lane { key: string; label: string; cues: Cue[]; byCue?: Map<string, Issue[]> }
 
 /** Deterministic speech-like envelope: louder inside cues, quiet in gaps. Used when no real audio is loaded. */
@@ -68,10 +69,10 @@ export function Timeline({ lanes, from, to, duration, shots = [], peaks, playhea
               return (
                 <button key={c.id} type="button" className={`tl-cue ${sev}${selected === c.id ? ' sel' : ''}`}
                   style={{ left: pct(c.start), width: `${((c.end - c.start) / span) * 100}%` }}
-                  title={`${c.text.replace(/<[^>]+>/g, '')}${iss.length ? '\n\n' + iss.map(i => '• ' + i.message).join('\n') : ''}`}
+                  title={`${stripTags(c.text)}${iss.length ? '\n\n' + iss.map(i => '• ' + i.message).join('\n') : ''}`}
                   aria-label={`Cue at ${(c.start / 1000).toFixed(2)} s${iss.length ? `, ${iss.length} issue${iss.length > 1 ? 's' : ''}` : ''}`}
                   onClick={() => onSelect?.(lane.key, c)}>
-                  <span>{c.text.replace(/<[^>]+>/g, '').replace(/\n/g, ' / ')}</span>
+                  <span>{stripTags(c.text).replace(/\n/g, ' / ')}</span>
                 </button>
               )
             })}

@@ -1,8 +1,18 @@
 import { fmtTime } from './parse.ts'
+import { stripTags, TAG } from './text.ts'
 import type { Cue, Format } from './types.ts'
 
-const stripTags = (s: string) => s.replace(/<[^>]+>/g, '')
 const xmlEscape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** WebVTT cue text: everything that is not a tag is escaped. */
+function vttText(s: string) {
+  let out = '', at = 0
+  for (const m of s.matchAll(TAG)) {
+    out += xmlEscape(s.slice(at, m.index)) + m[0]
+    at = m.index + m[0].length
+  }
+  return out + xmlEscape(s.slice(at))
+}
 
 function assClock(ms: number) {
   const cs = Math.round(Math.max(0, ms) / 10)
@@ -20,13 +30,13 @@ export function serialize(cues: Cue[], format: Format, opts: { lang?: string; ti
     case 'srt':
       return cues.map((c, i) => `${i + 1}\n${fmtTime(c.start, ',')} --> ${fmtTime(c.end, ',')}\n${c.text}\n`).join('\n')
     case 'vtt':
-      return 'WEBVTT\n\n' + cues.map(c => `${fmtTime(c.start)} --> ${fmtTime(c.end)}\n${c.text}\n`).join('\n')
+      return 'WEBVTT\n\n' + cues.map(c => `${fmtTime(c.start)} --> ${fmtTime(c.end)}\n${vttText(c.text)}\n`).join('\n')
     case 'sbv':
       return cues.map(c => `${sbvClock(c.start)},${sbvClock(c.end)}\n${stripTags(c.text)}\n`).join('\n')
     case 'ass': {
       const head = `[Script Info]\nTitle: ${opts.title ?? 'Caption QA export'}\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nWrapStyle: 0\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,64,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,3,0,2,60,60,50,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`
       const body = cues.map(c => {
-        const t = c.text.replace(/<i>/g, '{\\i1}').replace(/<\/i>/g, '{\\i0}').replace(/<b>/g, '{\\b1}').replace(/<\/b>/g, '{\\b0}').replace(/<[^>]+>/g, '').replace(/\n/g, '\\N')
+        const t = stripTags(c.text.replace(/<i>/g, '{\\i1}').replace(/<\/i>/g, '{\\i0}').replace(/<b>/g, '{\\b1}').replace(/<\/b>/g, '{\\b0}')).replace(/\n/g, '\\N')
         return `Dialogue: 0,${assClock(c.start)},${assClock(c.end)},Default,,0,0,0,,${t}`
       }).join('\n')
       return head + body + '\n'

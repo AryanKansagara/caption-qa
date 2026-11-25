@@ -1,5 +1,5 @@
 import { frameMs, type Rules } from './rules.ts'
-import { breakProblem, cps, lineChars, plain, textChars, weakEnd, wordCount, wpm } from './text.ts'
+import { breakProblem, cps, lineChars, plain, TAG, textChars, weakEnd, wordCount, wpm } from './text.ts'
 import type { Cue } from './types.ts'
 
 export type RuleId =
@@ -171,12 +171,15 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
 
     const stack: string[] = []
     let tagErr: string | null = null
-    for (const m of c.text.matchAll(/<(\/?)([a-z]+)[^>]*>/gi)) {
-      const name = m[2].toLowerCase()
+    for (const m of c.text.matchAll(TAG)) {
+      const name = (m[2] ?? m[3] ?? m[4])?.toLowerCase()
+      if (!name) continue
       if (!allowed.has(name)) { tagErr ??= `Tag <${name}> is not allowed by this profile.`; continue }
       if (!m[1]) stack.push(name)
       else if (stack.pop() !== name) tagErr ??= `Closing </${name}> without a matching <${name}>.`
     }
+    const unknown = p.match(/<\/[a-z][^\s<>]*>/i)
+    if (unknown) tagErr ??= `${unknown[0]} is not a subtitle tag; it is shown as text.`
     if (stack.length) tagErr ??= `<${stack[0]}> is never closed.`
     if (/\{\\/.test(c.text)) tagErr ??= 'ASS override codes left in the text.'
     if (tagErr) add('tags', c, 'error', tagErr)

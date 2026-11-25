@@ -1,6 +1,13 @@
 import { primaryLang } from './rules.ts'
 
-export const plain = (t: string) => t.replace(/<[^>]+>/g, '').replace(/\{\\[^}]*\}/g, '')
+const ATTR = String.raw`\s+[\w-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>]+)`
+/**
+ * Subtitle tags: SubRip and HTML styling, anything with HTML attributes, WebVTT spans and WebVTT timestamps. Any other text in angle brackets
+ * (<<Bonjour>>, a < b, I <3 you) is what the viewer reads. Group 1 is the closing slash, 2, 3 or 4 the name.
+ */
+export const TAG = new RegExp(String.raw`<(\/?)(?:(i|b|u|s|em|strong|strike|del|big|small|sub|sup|center|div|p|a|font|span|br|c|ruby|rt)(?:\.[^\s<>]*)?(?:${ATTR})*\s*\/?|([a-z][a-z0-9]*)(?:${ATTR})+\s*\/?|(v|lang)(?:\.[^\s<>]*)?(?:\s[^<>]*)?|(?:\d+:)?\d{2}:\d{2}\.\d{3})>`, 'gi')
+export const stripTags = (t: string) => t.replace(TAG, '')
+export const plain = (t: string) => stripTags(t).replace(/\{\\[^}]*\}/g, '')
 
 const CJK = new Set(['ja', 'zh', 'ko'])
 export const isCJK = (lang: string) => CJK.has(primaryLang(lang))
