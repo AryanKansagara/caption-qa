@@ -13,7 +13,7 @@ export default function Report({ id }: { id: string }) {
   if (loading) return <div className="boot"><span className="spinner" /> Building report</div>
   if (!p) return <NotFound />
   const prof = getProfile(p)
-  const overall = qc.length ? Math.round(qc.reduce((a, q) => a + q.score, 0) / qc.length) : 0
+  const overall = qc.length ? Math.min(qc.every(q => q.score === 100) ? 100 : 99, Math.round(qc.reduce((a, q) => a + q.score, 0) / qc.length)) : 0
   return (
     <div className="report">
       <div className="report-bar no-print">

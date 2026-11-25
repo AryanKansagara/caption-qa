@@ -231,5 +231,6 @@ export function score(cues: Cue[], issues: Issue[]): number {
   for (const i of issues) per.set(i.cueId, (per.get(i.cueId) ?? 0) + (i.severity === 'error' ? 1 : 0.35))
   let pen = 0
   for (const v of per.values()) pen += Math.min(3, v)
-  return Math.max(0, Math.round(100 * (1 - pen / cues.length)))
+  const s = Math.round(100 * (1 - pen / cues.length))
+  return Math.max(0, pen > 0 ? Math.min(99, s) : s)
 }
