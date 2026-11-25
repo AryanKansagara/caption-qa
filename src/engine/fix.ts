@@ -238,6 +238,7 @@ export const shift = (cues: Cue[], ms: number): Cue[] => cues.map(c => ({ ...c, 
 export function resync(cues: Cue[], a1: number, b1: number, a2: number, b2: number): Cue[] {
   if (a1 === a2) throw new Error('The two sync points must be at different times.')
   const k = (b2 - b1) / (a2 - a1)
+  if (!(k > 0)) throw new Error(b1 === b2 ? 'The two correct times must be different.' : 'These points would run time backwards: the line that is earlier now must stay earlier.')
   const map = (t: number) => Math.max(0, round(b1 + (t - a1) * k))
   return cues.map(c => ({ ...c, start: map(c.start), end: map(c.end) }))
 }

@@ -126,14 +126,19 @@ test('#14 CSV cells cannot run as formulas and file names are quoted', async ({ 
   expect(sum.text).toContain('"a, final_en.srt"')
 })
 
-test.fail('#15 a two-point resync that would run time backwards is refused', async ({ page }) => {
+test('#15 a two-point resync that would run time backwards is refused', async ({ page }) => {
   await project(page, 'a_en.srt', srt([1000, 2000, 'One'], [11000, 12000, 'Two']), 'Fixes')
   await page.getByLabel('Early: now').fill('1')
   await page.getByLabel('should be').first().fill('12')
   await page.getByLabel('Late: now').fill('11')
   await page.getByLabel('should be').last().fill('2')
   await page.getByRole('button', { name: 'Resync', exact: true }).click()
-  await expect(page.locator('.toast').last()).toBeVisible()
+  await expect(toasts(page)).toContainText('These points would run time backwards')
+  await page.getByLabel('should be').first().fill('5')
+  await page.getByLabel('should be').last().fill('5')
+  await page.getByLabel('Apply to every track').check()
+  await page.getByRole('button', { name: 'Resync', exact: true }).click()
+  await expect(toasts(page)).toContainText('The two correct times must be different')
   expect(times((await exportAs(page, 'English', 'srt')).text)).toEqual(['00:00:01,000 --> 00:00:02,000', '00:00:11,000 --> 00:00:12,000'])
 })
 
