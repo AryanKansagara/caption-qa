@@ -142,7 +142,7 @@ test('#15 a two-point resync that would run time backwards is refused', async ({
   expect(times((await exportAs(page, 'English', 'srt')).text)).toEqual(['00:00:01,000 --> 00:00:02,000', '00:00:11,000 --> 00:00:12,000'])
 })
 
-test.fail('#16 a long track with one error does not score 100', async ({ page }) => {
+test('#16 a long track with one error does not score 100', async ({ page }) => {
   await project(page, 'a_en.srt', srt(...Array.from({ length: 300 }, (_, i): [number, number, string] => [i * 3000, i * 3000 + 2000, i ? 'Clean line.' : 'Bad ★ line.'])), 'QC overview')
   expect(await card(page, 'English')).toBe('99 | a_en.srt · 300 cues | 1 errors · 0 warnings')
 })
