@@ -7,7 +7,7 @@ import { getProfile, readSubtitleFile, sourceOf, trackFrom, updateTracks, type P
 import { saveProject, type Project } from './store.ts'
 import { ask, fmtN, toast } from './ui.tsx'
 
-const FIELDS: { k: keyof Rules; label: string; step?: number; min?: number; hint?: string }[] = [
+const FIELDS: { k: keyof Rules; label: string; step?: number; min: number; hint?: string }[] = [
   { k: 'maxCps', label: 'Max characters / second', step: 0.5, min: 0, hint: '0 turns the check off' },
   { k: 'maxWpm', label: 'Max words / minute', step: 5, min: 0, hint: '0 turns the check off' },
   { k: 'maxChars', label: 'Max characters / line', min: 5 },
@@ -160,7 +160,6 @@ function Profile({ p }: { p: Project }) {
   const base = rulesFor(prof, lang, p.kids)
   const val = (k: keyof Rules) => (p.overrides[k] ?? base[k]) as number
   const set = (k: keyof Rules, v: number) => {
-    if (!Number.isFinite(v)) return
     const o = { ...p.overrides }
     if (v === base[k]) delete o[k]
     else (o as Record<string, number>)[k] = v
@@ -185,12 +184,26 @@ function Profile({ p }: { p: Project }) {
         {FIELDS.map(f => (
           <label key={f.k} className={`field${p.overrides[f.k] !== undefined ? ' changed' : ''}`} title={f.hint}>
             <span>{f.label}</span>
-            <input type="number" step={f.step ?? 1} min={f.min} value={val(f.k)} onChange={e => set(f.k, Number(e.target.value))} />
+            <NumberInput value={val(f.k)} min={f.min} step={f.step ?? 1} onChange={v => set(f.k, v)} />
           </label>
         ))}
       </div>
       <p className="muted tiny">Values shown resolve for {LANGS[lang.split(/[-_]/)[0]] ?? lang}. Edited fields turn this project into a custom profile.</p>
     </div>
+  )
+}
+
+/** Saves only numbers at or above the minimum. While the field holds anything else it says so and the saved value stays. */
+function NumberInput({ value, min, step, onChange }: { value: number; min: number; step: number; onChange(v: number): void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const ok = (s: string) => s.trim() !== '' && Number.isFinite(Number(s)) && Number(s) >= min
+  return (
+    <>
+      <input type="number" step={step} min={min} value={draft ?? value} aria-invalid={draft !== null && !ok(draft) || undefined}
+        onChange={e => { setDraft(e.target.value); if (ok(e.target.value)) onChange(Number(e.target.value)) }}
+        onBlur={() => setDraft(null)} />
+      {draft !== null && !ok(draft) && <small className="error" role="alert">At least {min}. {value} stays in use.</small>}
+    </>
   )
 }
 

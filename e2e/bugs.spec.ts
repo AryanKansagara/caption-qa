@@ -51,10 +51,24 @@ test.fail('#5 TTML frame rate written as 1000:1001 gives real times, and an empt
   expect((await exportAs(page, 'German', 'srt')).text).toContain('00:00:03,000 --> 00:00:04,000\nZwei')
 })
 
-test.fail('#6 a cleared rule field does not become 0', async ({ page }) => {
+test('#6 a cleared rule field does not become 0', async ({ page }) => {
   await project(page, 'a_en.srt', srt([1000, 3000, 'One'], [5000, 7000, 'Two']))
-  await page.getByLabel('Frame rate').fill('')
-  await page.getByLabel('Frame rate').blur()
+  const fps = page.getByLabel('Frame rate')
+  for (const bad of ['', '0', '-24', '0.5']) {
+    await fps.fill(bad)
+    await expect(page.getByRole('alert')).toHaveText('At least 1. 24 stays in use.')
+  }
+  await fps.blur()
+  await expect(fps).toHaveValue('24')
+  await expect(page.getByText('with custom edits')).toHaveCount(0)
+  // Clearing and typing works, and 0 still turns a check off.
+  await fps.fill('')
+  await fps.pressSequentially('25')
+  await expect(page.getByText('with custom edits')).toBeVisible()
+  await page.getByLabel('Max characters / second').fill('0')
+  await page.reload()
+  await expect(fps).toHaveValue('25')
+  await expect(page.getByLabel('Max characters / second')).toHaveValue('0')
   await tab(page, 'QC overview')
   expect(await issues(page)).toEqual([])
 })
