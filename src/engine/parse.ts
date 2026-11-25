@@ -51,6 +51,8 @@ export function parseClock(s: string): number | null {
 
 const TC = String.raw`(\d+:\d{1,2}:\d{1,2}[.,]\d{1,3}|\d{1,2}:\d{1,2}[.,]\d{1,3})`
 const ARROW = new RegExp(`^\\s*${TC}\\s*-->\\s*${TC}`)
+/** A line meant as a timing line, even when a time in it is unreadable. */
+const TC_LIKE = /^\s*\d\S*:\S*[:.,]\S+\s*-->\s*\S+:\S*[:.,]\S+/
 
 /** Overlap and negative-duration checks shared by every format. `lineOf` maps cue index to its source line. */
 export function validateTiming(cues: Cue[], lineOf: number[]): ParseIssue[] {
@@ -90,47 +92,66 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
   let i = 0
   if (vtt) {
     if (!/^WEBVTT/.test(L[0] ?? '')) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'WebVTT files must start with "WEBVTT".' })
-    while (i < L.length && L[i].trim() !== '') i++
+    while (i < L.length && L[i].trim() !== '' && !TC_LIKE.test(L[i])) i++
+    if (i > 0 && i < L.length && L[i].trim() !== '') issues.push({ line: i + 1, kind: 'format', severity: 'warn', message: 'Blank line missing after the WebVTT header.' })
   }
   let expectNum = 1
   while (i < L.length) {
     while (i < L.length && L[i].trim() === '') i++
     if (i >= L.length) break
-    const blockStart = i
-    const block: string[] = []
-    while (i < L.length && L[i].trim() !== '') block.push(L[i++])
-    if (vtt && /^(NOTE|STYLE|REGION)\b/.test(block[0])) continue
-    const timing = block.findIndex(l => ARROW.test(l))
-    const k = timing >= 0 ? timing : block.findIndex(l => l.includes('-->'))
-    if (k < 0) {
-      issues.push({ line: blockStart + 1, kind: 'timecode', severity: 'error', message: `No timecode line found in this block ("${block[0].slice(0, 40)}"). Block skipped.` })
-      continue
+    let from = i
+    const rows: string[] = []
+    while (i < L.length && L[i].trim() !== '') rows.push(L[i++])
+    if (vtt && /^(NOTE|STYLE|REGION)\b/.test(rows[0])) {
+      // A comment cannot contain a timing line: on the second line this is a cue identifier, further down a new cue starts there.
+      const at = rows.findIndex(l => ARROW.test(l))
+      if (at < 0) continue
+      if (at > 1) from += rows.splice(0, at).length
     }
-    if (!vtt) {
-      const num = block[0].trim()
-      if (k === 0) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: 'Cue number missing before the timecode.' })
-      else if (!/^\d+$/.test(num)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Cue number "${num.slice(0, 20)}" is not a number.` })
-      else if (+num !== expectNum && !(cues.length === 0 && +num === 0)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
-      if (/^\d+$/.test(num)) expectNum = +num + 1
-      else expectNum++
+    // One entry per cue: usually the whole block, more when the blank line between cues is missing.
+    const starts = [0]
+    const head = rows.findIndex(l => TC_LIKE.test(l))
+    for (let k = (head >= 0 ? head : rows.findIndex(l => l.includes('-->'))) + 1; k > 0 && k < rows.length; k++) {
+      if (!TC_LIKE.test(rows[k])) continue
+      const numbered = /^\s*\d+\s*$/.test(rows[k - 1]) && !TC_LIKE.test(rows[k - 1])
+      starts.push(numbered && k - 1 > starts.at(-1)! ? k - 1 : k)
     }
-    const m = block[k].match(ARROW)
-    const lineNo = blockStart + k + 1
-    if (!m) {
-      issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Unreadable timecode "${block[k].trim().slice(0, 60)}". Cue skipped.` })
-      continue
-    }
-    const start = parseClock(m[1]), end = parseClock(m[2])
-    if (start === null || end === null) {
-      issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Invalid time value in "${block[k].trim()}". Cue skipped.` })
-      continue
-    }
-    if (!vtt && m[1].includes('.')) issues.push({ line: lineNo, kind: 'timecode', severity: 'warn', message: 'SRT timecodes should use a comma before milliseconds.' })
-    let body = block.slice(k + 1).join('\n')
-    if (vtt) body = vttUnescape(body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, ''))
-    body = body.replace(/<font[^>]*>|<\/font>/gi, '').replace(/\{\\an\d\}/g, '')
-    cues.push({ id: '', start, end, text: body.trim() })
-    lineOf.push(lineNo)
+    starts.forEach((at, n) => {
+      const blockStart = from + at
+      const block = rows.slice(at, starts[n + 1])
+      if (n) issues.push({ line: blockStart + 1, kind: 'format', severity: 'warn', message: 'Blank line missing before this cue.' })
+      const timing = block.findIndex(l => ARROW.test(l))
+      const k = timing >= 0 ? timing : block.findIndex(l => l.includes('-->'))
+      if (k < 0) {
+        issues.push({ line: blockStart + 1, kind: 'timecode', severity: 'error', message: `No timecode line found in this block ("${block[0].slice(0, 40)}"). Block skipped.` })
+        return
+      }
+      if (!vtt) {
+        const num = block[0].trim()
+        if (k === 0) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: 'Cue number missing before the timecode.' })
+        else if (!/^\d+$/.test(num)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Cue number "${num.slice(0, 20)}" is not a number.` })
+        else if (+num !== expectNum && !(cues.length === 0 && +num === 0)) issues.push({ line: blockStart + 1, kind: 'numbering', severity: 'warn', message: `Numbering jumps: expected ${expectNum}, found ${num}.` })
+        if (/^\d+$/.test(num)) expectNum = +num + 1
+        else expectNum++
+      }
+      const m = block[k].match(ARROW)
+      const lineNo = blockStart + k + 1
+      if (!m) {
+        issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Unreadable timecode "${block[k].trim().slice(0, 60)}". Cue skipped.` })
+        return
+      }
+      const start = parseClock(m[1]), end = parseClock(m[2])
+      if (start === null || end === null) {
+        issues.push({ line: lineNo, kind: 'timecode', severity: 'error', message: `Invalid time value in "${block[k].trim()}". Cue skipped.` })
+        return
+      }
+      if (!vtt && m[1].includes('.')) issues.push({ line: lineNo, kind: 'timecode', severity: 'warn', message: 'SRT timecodes should use a comma before milliseconds.' })
+      let body = block.slice(k + 1).join('\n')
+      if (vtt) body = vttUnescape(body.replace(/<(\/?)(c|v|lang|ruby|rt)(\.[^>\s]*)?(\s[^>]*)?>/g, '').replace(/<\d+:\d{2}[:.][\d.:]+>/g, ''))
+      body = body.replace(/<font[^>]*>|<\/font>/gi, '').replace(/\{\\an\d\}/g, '')
+      cues.push({ id: '', start, end, text: body.trim() })
+      lineOf.push(lineNo)
+    })
   }
   return { cues, lineOf, issues }
 }

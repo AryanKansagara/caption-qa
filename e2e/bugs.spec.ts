@@ -28,7 +28,7 @@ test.fail('#2 a PySceneDetect scene list loads its start times, not its scene nu
   expect(shots.filter((s) => s > 0)).toEqual([5005, 9510])
 })
 
-test.fail('#3 a cue after a missing blank line is not swallowed', async ({ page }) => {
+test('#3 a cue after a missing blank line is not swallowed', async ({ page }) => {
   await newProject(page)
   await choose(page, ['a_en.srt', '1\n00:00:01,000 --> 00:00:02,000\nHello\n2\n00:00:03,000 --> 00:00:04,000\nBye\n'], ['b_en.vtt', 'WEBVTT\n00:01.000 --> 00:02.000\nHi\n\n00:03.000 --> 00:04.000\nBye\n'])
   await expect(pending(page, 'b_en.vtt')).toBeVisible()
