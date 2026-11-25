@@ -57,6 +57,8 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
     const key = `${kind}:${before.map(c => c.id).join('+')}`
     if (rejected.has(key)) return
     if (after.length === before.length && after.every((a, i) => a.start === before[i].start && a.end === before[i].end && a.text === before[i].text)) return
+    // Never leave a cue without duration, unless it was delivered that way and gets no worse.
+    if (after.some(a => { const b = before.find(x => x.id === a.id); return a.end <= a.start && !(b && b.end <= b.start && a.end - a.start >= b.end - b.start) })) return
     out.push({ key, kind, note, before, after })
   }
 
@@ -85,11 +87,14 @@ export function propose(cues: Cue[], r: Rules, ctx: FixContext, rejected: Set<st
       if (parts) {
         const [a, b] = parts
         const at = c.start + dur * (a.length / (a.length + b.length))
-        push('split', 'Split into two cues at the most natural break, timed by length.', [c], [
-          { id: c.id, start: c.start, end: round(at - minGap / 2), text: rebreak(a, r.maxChars, ctx.lang, r.halfWidthLatin) },
-          { id: freshId(cues, c.id), start: round(at + minGap / 2), end: c.end, text: rebreak(b, r.maxChars, ctx.lang, r.halfWidthLatin) },
-        ])
-        return
+        const endA = round(at - minGap / 2), startB = round(at + minGap / 2)
+        if (endA > c.start && startB < c.end) {
+          push('split', 'Split into two cues at the most natural break, timed by length.', [c], [
+            { id: c.id, start: c.start, end: endA, text: rebreak(a, r.maxChars, ctx.lang, r.halfWidthLatin) },
+            { id: freshId(cues, c.id), start: startB, end: c.end, text: rebreak(b, r.maxChars, ctx.lang, r.halfWidthLatin) },
+          ])
+          return
+        }
       }
     }
 
