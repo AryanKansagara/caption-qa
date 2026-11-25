@@ -8,7 +8,7 @@ import { langName } from './engine/rules.ts'
 import { serialize } from './engine/serialize.ts'
 import { stripTags } from './engine/text.ts'
 import { FORMAT_EXT, FORMAT_LABEL, type Cue, type Format } from './engine/types.ts'
-import { getProfile, isCustom, qcTrack, snapshotOf, undoDepth, undoLabel, undoTracks, updateTracks, useProject, useQC, type TrackQC } from './projectData.ts'
+import { getProfile, importErrors, isCustom, qcTrack, snapshotOf, undoDepth, undoLabel, undoTracks, updateTracks, useProject, useQC, type TrackQC } from './projectData.ts'
 import { getDefaults, saveProject, type Project, type Snapshot } from './store.ts'
 import { deleteSnapshotCloud } from './sync.ts'
 import { ask, CopyButton, download, Empty, go, isTyping, Link, NotFound, SyntheticBadge, toast } from './ui.tsx'
@@ -404,8 +404,8 @@ export function issuesCsv(qc: TrackQC[]) {
 }
 
 export function summaryCsv(qc: TrackQC[]) {
-  const rows = [['language', 'role', 'file', 'cues', 'score', ...RULES.map(r => r.id)]]
-  for (const q of qc) rows.push([q.track.lang, q.track.role, q.track.fileName, String(q.track.cues.length), String(q.score), ...RULES.map(r => { const s = q.summary.find(x => x.id === r.id); return s ? `${s.pass ? 'pass' : 'fail'} (${s.errors}e/${s.warnings}w)` : 'n/a' })])
+  const rows = [['language', 'role', 'file', 'cues', 'score', ...RULES.map(r => r.id), 'import-errors']]
+  for (const q of qc) rows.push([q.track.lang, q.track.role, q.track.fileName, String(q.track.cues.length), String(q.score), ...RULES.map(r => { const s = q.summary.find(x => x.id === r.id); return s ? `${s.pass ? 'pass' : 'fail'} (${s.errors}e/${s.warnings}w)` : 'n/a' }), String(importErrors(q.track).length)])
   return toCsv(rows)
 }
 
