@@ -202,13 +202,28 @@ test('#21 timing errors that were read do not hide a pass, and clean files are u
   await expect(rows.nth(1).locator('td').last()).toHaveText('Pass1 import error')
 })
 
-test.fail('#22 compare lists every track of a language', async ({ page }) => {
+test('#22 compare lists every track of a language', async ({ page }) => {
   await newProject(page)
   await importFiles(page, ['a_en.srt', srt([1000, 3000, 'One'])], ['full_de.srt', srt([1000, 3000, 'Eins'])], ['forced_de.srt', srt([1000, 3000, 'Schild'])])
   await tab(page, 'History')
   const rows = page.locator('.panel', { has: page.getByRole('heading', { name: 'Compare' }) }).locator('table').first().locator('tbody tr')
   await expect(rows.first()).toBeVisible()
   expect(await rows.count()).toBe(3)
+  await expect(rows.nth(2)).toContainText('forced_de.srt')
+  await page.getByRole('button', { name: 'Save snapshot' }).first().click()
+  await expect(page.locator('.snap-list li')).toHaveCount(1)
+  // Only the second German track changes.
+  await tab(page, 'Review')
+  await page.getByRole('radiogroup', { name: 'Track' }).getByRole('radio').nth(2).click()
+  await page.locator('table.sbs tbody tr').first().click()
+  await page.locator('.editor textarea').fill('Neues Schild')
+  await page.locator('.editor').getByRole('button', { name: 'Save' }).click()
+  await expect(toasts(page)).toContainText('Saved cue #1')
+  await tab(page, 'History')
+  await expect(page.getByRole('heading', { name: 'German (full_de.srt): 0 changed cues' })).toBeVisible()
+  await rows.nth(2).click()
+  await expect(page.getByRole('heading', { name: 'German (forced_de.srt): 1 changed cue' })).toBeVisible()
+  await expect(page.locator('.diff-table tbody tr')).toContainText(['Neues Schild'])
 })
 
 test.fail('#23 closing a gap does not push a cue over the maximum duration', async ({ page }) => {
