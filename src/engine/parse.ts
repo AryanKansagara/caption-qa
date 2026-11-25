@@ -167,8 +167,9 @@ function parseArrowBlocks(text: string, vtt: boolean): { cues: Cue[]; lineOf: nu
 
 function assTime(s: string) { return parseClock(s) }
 
-function assText(t: string) {
-  let out = '', italic = false
+/** Null when the line only draws: after \p1 (or a larger scale) the text is vector commands, until \p0. */
+function assText(t: string): string | null {
+  let out = '', italic = false, drawing = false, drew = false
   for (const part of t.split(/(\{[^}]*\})/)) {
     if (part.startsWith('{')) {
       const im = part.match(/\\i([01])/)
@@ -176,12 +177,16 @@ function assText(t: string) {
         if (im[1] === '1' && !italic) { out += '<i>'; italic = true }
         if (im[1] === '0' && italic) { out += '</i>'; italic = false }
       }
+      const scale = [...part.matchAll(/\\p\s*(\d+)/g)].at(-1)
+      if (scale) drawing = +scale[1] > 0
       continue
     }
+    if (drawing) { drew ||= part.trim() !== ''; continue }
     out += part.replace(/\\N/gi, '\n').replace(/\\h/g, ' ')
   }
   if (italic) out += '</i>'
-  return out.replace(/<i>(\s*)<\/i>/g, '$1').trim()
+  out = out.replace(/<i>(\s*)<\/i>/g, '$1').trim()
+  return !out && drew ? null : out
 }
 
 function parseAss(text: string) {
@@ -205,7 +210,9 @@ function parseAss(text: string) {
       issues.push({ line: i + 1, kind: 'timecode', severity: 'error', message: `Invalid ASS time "${get('start')}" / "${get('end')}". Line skipped.` })
       return
     }
-    cues.push({ id: '', start, end, text: assText(get('text')) })
+    const body = assText(get('text'))
+    if (body === null) return
+    cues.push({ id: '', start, end, text: body })
     lineOf.push(i + 1)
   })
   if (!fields && cues.length === 0) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'No [Events] section with Dialogue lines found.' })

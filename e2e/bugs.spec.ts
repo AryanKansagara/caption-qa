@@ -161,7 +161,7 @@ test('#18 two numbers next to each other stay two numbers', async ({ page }) => 
   expect((await issues(page)).filter((i) => i.includes('Number'))).toEqual([])
 })
 
-test.fail('#19 ASS drawings are not subtitle text', async ({ page }) => {
+test('#19 ASS drawings are not subtitle text', async ({ page }) => {
   await newProject(page)
   await choose(page, ['a_en.ass', `${EV}Dialogue: 0,0:00:01.00,0:00:03.00,D,,0,0,0,,{\\p1}m 0 0 l 100 0 100 100 0 100{\\p0}\nDialogue: 0,0:00:04.00,0:00:06.00,D,,0,0,0,,Hello\n`])
   await expect(pending(page, 'a_en.ass')).toBeVisible()
