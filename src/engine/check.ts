@@ -65,8 +65,21 @@ export function align(target: Cue[], source: Cue[]): Map<string, Cue[]> {
   return out
 }
 
-const normalizeNum = (s: string) => s.replace(/(?<=\d)[.,\s](?=\d{3}\b)/g, '').replace(',', '.')
-const numbersIn = (t: string) => (plain(t).match(/\d+(?:[.,\s]\d{3})*(?:[.,]\d+)?/g) ?? []).map(normalizeNum).sort()
+// A thousands group is 1 to 3 digits, then separators with exactly 3 digits each. A line break separates two numbers.
+const NUM_GROUPED = /(?<!\d)\d{1,3}(?:[.,]\d{3}|[^\S\r\n]\d{3})+(?!\d)(?:[.,]\d+)?|\d+(?:[.,]\d+)?/g
+const NUM_SPACED = /(?<!\d)\d{1,3}(?:[.,]\d{3})+(?!\d)(?:[.,]\d+)?|\d+(?:[.,]\d+)?/g
+const normalizeNum = (s: string) => s.replace(/(?<=\d)[.,\s](?=\d{3}(?!\d))/g, '').replace(',', '.')
+const numbersIn = (t: string, re: RegExp) => (plain(t).match(re) ?? []).map(normalizeNum).sort()
+
+/** Numbers of the source that the target lacks. "36 100" can be one number or two: either reading may match. */
+export function missingNumbers(source: string, target: string): string[] {
+  const missing = (re: RegExp) => {
+    const tn = numbersIn(target, re)
+    return numbersIn(source, re).filter(n => { const k = tn.indexOf(n); if (k >= 0) { tn.splice(k, 1); return false } return true })
+  }
+  const grouped = missing(NUM_GROUPED)
+  return grouped.length && missing(NUM_SPACED).length ? grouped : []
+}
 
 const HONORIFICS = new Set(['Mr', 'Mrs', 'Ms', 'Dr', 'Sr', 'Sra', 'Herr', 'Frau', 'Mme', 'Mlle', 'Sir', 'Madam'])
 
@@ -201,8 +214,7 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
       }
       const norm = (s: string) => plain(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
       if (norm(c.text) === norm(st) && /\p{L}{3}/u.test(norm(st)) && norm(st).split(' ').length > 1) add('untranslated', c, 'error', 'Identical to the source; looks untranslated.')
-      const sn = numbersIn(st), tn = numbersIn(c.text)
-      const missing = sn.filter(n => { const k = tn.indexOf(n); if (k >= 0) { tn.splice(k, 1); return false } return true })
+      const missing = missingNumbers(st, c.text)
       if (missing.length) add('numbers', c, 'warn', `Source number${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not found in the target.`)
       const tp = plain(c.text)
       const lost = [...new Set(namesIn(st))].filter(n => !tp.includes(n))
