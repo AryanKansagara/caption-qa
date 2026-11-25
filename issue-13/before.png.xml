@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xml:lang="es">
+  <body>
+    <div>
+      <p begin="00:00:01.000" end="00:00:05.000">Cada mañana a las cuatro se encienden los hornos de Mill Lane Bakery.</p>
+      <p begin="00:00:05.084" end="00:00:07.954">Soy Priya. Llevo once años horneando aquí.</p>
+      <p begin="00:00:08.554" end="00:00:12.954">Lo primero es la masa madre.<br/>Necesita 36 horas de principio a fin.</p>
+      <p begin="00:00:13.038" end="00:00:17.508">Alimentamos la masa madre dos veces al día<br/>con harina de un molino de Kent.</p>
+      <p begin="00:00:17.592" end="00:00:20.462">La temperatura importa más<br/>que cualquier otra cosa.</p>
+      <p begin="00:00:20.712" end="00:00:24.182">A 24 grados, la masa dobla su tamaño<br/>en unas cinco horas.</p>
+      <p begin="00:00:24.266" end="00:00:26.796">Si hace demasiado calor, se vuelve ácida y floja.</p>
+      <p begin="00:00:27.696" end="00:00:28.256">Tom se encarga de los cruasanes.</p>
+      <p begin="00:00:29.580" end="00:00:33.450">Cada tanda se pliega tres veces,<br/>con 72 capas de mantequilla.</p>
+      <p begin="00:00:33.534" end="00:00:36.064">Si vas con prisa, la mantequilla se rompe.</p>
+      <p begin="00:00:36.764" end="00:00:39.634">A las seis, los primeros clientes<br/>ya están en la puerta.</p>
+      <p begin="00:00:39.718" end="00:00:44.248">Casi todos son habituales.<br/>La señora Okafor viene a diario desde 2009.</p>
+      <p begin="00:00:44.332" end="00:00:46.732">-Good morning!<br/>-Morning, Mrs. Okafor.</p>
+      <p begin="00:00:46.816" end="00:00:49.616">¿Lo de siempre? Un pan de centeno<br/>y un bollo de cardamomo.</p>
+      <p begin="00:00:49.866" end="00:00:53.796">El pan es algo pequeño, pero la gente<br/>organiza su día en torno a él.</p>
+      <p begin="00:00:54.996" end="00:00:56.926"><span tts:fontStyle="italic">Se espera lluvia después de comer.</p>
+      <p begin="00:00:57.010" end="00:00:59.410">A mediodía empezamos de nuevo para mañana.</p>
+      <p begin="00:00:59.494" end="00:01:02.494">Nunca se detiene del todo.<br/>Eso es lo que más me gusta.</p>
+      <p begin="00:01:03.094" end="00:01:06.424">Muestra sintética para Caption QA.<br/>No es una panadería real.</p>
+    </div>
+  </body>
+</tt>
