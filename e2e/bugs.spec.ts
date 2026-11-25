@@ -154,7 +154,7 @@ test('#17 a file without cues is not called cleanly read', async ({ page }) => {
   expect(await pending(page, 'empty.srt').textContent()).not.toContain('Read cleanly')
 })
 
-test.fail('#18 two numbers next to each other stay two numbers', async ({ page }) => {
+test('#18 two numbers next to each other stay two numbers', async ({ page }) => {
   await newProject(page)
   await importFiles(page, ['t_en.srt', srt([1000, 4000, 'In 2009 100 people came'])], ['t_es.srt', srt([1000, 4000, 'En 2009, 100 personas vinieron'])])
   await tab(page, 'QC overview')
