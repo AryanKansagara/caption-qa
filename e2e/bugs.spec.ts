@@ -107,7 +107,7 @@ test('#11 auto-fix never ends a cue before it starts', async ({ page }) => {
   expect(t.filter(([a, b]) => b <= a)).toEqual([])
 })
 
-test.fail('#12 a cue under a long earlier cue is an overlap', async ({ page }) => {
+test('#12 a cue under a long earlier cue is an overlap', async ({ page }) => {
   await project(page, 'a_en.srt', srt([1000, 7000, 'Long narration here'], [2000, 3000, 'Short one'], [4000, 6000, 'Third one']), 'QC overview')
   expect((await issues(page)).filter((i) => i.includes('Overlaps')).map((i) => i.slice(0, 2))).toEqual(['#2', '#3'])
 })

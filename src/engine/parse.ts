@@ -1,4 +1,4 @@
-import type { Cue, Format, ParseIssue, ParseResult } from './types.ts'
+import { lastOnScreen, type Cue, type Format, type ParseIssue, type ParseResult } from './types.ts'
 
 // ---------- Encoding ----------
 
@@ -57,11 +57,18 @@ const TC_LIKE = /^\s*\d\S*:\S*[:.,]\S+\s*-->\s*\S+:\S*[:.,]\S+/
 /** Overlap and negative-duration checks shared by every format. `lineOf` maps cue index to its source line. */
 export function validateTiming(cues: Cue[], lineOf: number[]): ParseIssue[] {
   const out: ParseIssue[] = []
+  // By start time, the earlier cue that is on screen longest.
+  const order = cues.map((_, i) => i).sort((a, b) => cues[a].start - cues[b].start || a - b)
+  const longest = new Map(lastOnScreen(order.map(i => cues[i])).map((k, n) => [order[n], order[k] ?? -1]))
   cues.forEach((c, i) => {
     const line = lineOf[i] ?? 0
     if (c.end <= c.start) out.push({ line, kind: 'negative', severity: 'error', message: c.end === c.start ? 'Zero-length cue: end time equals start time.' : `End time is before start time (${fmtTime(c.end)} < ${fmtTime(c.start)}).` })
     const prev = cues[i - 1]
     if (prev && c.start < prev.end) out.push({ line, kind: 'overlap', severity: 'error', message: `Overlaps the previous cue by ${prev.end - c.start} ms (starts ${fmtTime(c.start)}, previous ends ${fmtTime(prev.end)}).` })
+    else {
+      const k = longest.get(i)!, long = cues[k]
+      if (long && k < i && c.start < long.end) out.push({ line, kind: 'overlap', severity: 'error', message: `Overlaps the cue on line ${lineOf[k] ?? 0} by ${long.end - c.start} ms (starts ${fmtTime(c.start)}, that cue ends ${fmtTime(long.end)}).` })
+    }
     if (!c.text.trim()) out.push({ line, kind: 'empty', severity: 'warn', message: 'Cue has no text.' })
   })
   return out

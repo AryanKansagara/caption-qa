@@ -1,6 +1,6 @@
 import { frameMs, type Rules } from './rules.ts'
 import { breakProblem, cps, lineChars, plain, TAG, textChars, weakEnd, wordCount, wpm } from './text.ts'
-import type { Cue } from './types.ts'
+import { lastOnScreen, type Cue } from './types.ts'
 
 export type RuleId =
   | 'cps' | 'wpm' | 'line-length' | 'line-count' | 'line-break'
@@ -15,7 +15,7 @@ export const RULES: { id: RuleId; label: string; desc: string; needsSource?: boo
   { id: 'line-break', label: 'Line breaks', desc: 'Articles and prepositions kept with their nouns; one line when it fits; balanced, bottom-heavy pyramid.' },
   { id: 'min-duration', label: 'Flashing cues', desc: 'Cues shorter than the minimum duration (or the per-word minimum).' },
   { id: 'max-duration', label: 'Maximum duration', desc: 'Cues on screen longer than the limit.' },
-  { id: 'overlap', label: 'Overlaps', desc: 'A cue starts before the previous one ends.' },
+  { id: 'overlap', label: 'Overlaps', desc: 'A cue starts before an earlier one ends.' },
   { id: 'gap', label: 'Gaps', desc: 'Gaps below the minimum frame gap, or short gaps that should be closed.' },
   { id: 'shot-change', label: 'Shot changes', desc: 'In or out times a few frames off a shot change.' },
   { id: 'expansion', label: 'Translation expansion', desc: 'Target length against the aligned source line.', needsSource: true },
@@ -113,6 +113,7 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
   const allowed = new Set(r.allowedTags)
   const shots = ctx.shots ?? []
   const half = r.halfWidthLatin
+  const before = lastOnScreen(cues)
 
   cues.forEach((c, i) => {
     const dur = c.end - c.start
@@ -145,12 +146,12 @@ export function check(cues: Cue[], r: Rules, ctx: Context): Issue[] {
     if (dur > r.maxDurationMs + 1) add('max-duration', c, 'warn', `On screen for ${fmtS(dur)} (max ${fmtS(r.maxDurationMs)}).`)
     if (dur <= 0) add('min-duration', c, 'error', 'Zero or negative duration.')
 
-    const prev = cues[i - 1]
+    const prev = cues[before[i]]
     if (prev) {
       const gap = c.start - prev.end
       if (gap < 0) add('overlap', c, 'error', c.start === prev.start && c.end === prev.end
         ? 'Same in and out times as the previous cue (two positioned events). Most platforms want one cue: merge them into two lines.'
-        : `Starts ${-gap} ms before the previous cue ends.`)
+        : `Starts ${-gap} ms before ${prev === cues[i - 1] ? 'the previous cue' : `cue #${before[i] + 1}`} ends.`)
       else if (gap < minGap - 1) add('gap', c, 'error', `Gap of ${Math.round(gap / f)} frames before this cue (min ${r.minGapFrames}).`)
       else if (r.closeGapFrames > 0 && gap < r.closeGapFrames * f - 1 && gap > minGap + 1) add('gap', c, 'warn', `Gap of ${Math.round(gap / f)} frames: close it to ${r.minGapFrames} frames.`)
     }
