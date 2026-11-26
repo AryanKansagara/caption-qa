@@ -196,7 +196,7 @@ function ttmlTime(s: string, fps: number, tickRate: number): number | null {
   if (m) return (+m[1] * 60 + +m[2]) * 1000 + Math.round(+`0.${m[3]}` * 1000)
   // Bare seconds are not valid TTML but Apple/iTunes files use them.
   if (/^\d+(\.\d+)?$/.test(s)) return Math.round(+s * 1000)
-  m = s.match(/^([\d.]+)(h|m|s|ms|f|t)$/)
+  m = s.match(/^(\d+\.?\d*|\.\d+)(h|m|s|ms|f|t)$/)
   if (m) {
     const v = +m[1]
     const mult: Record<string, number> = { h: 3600000, m: 60000, s: 1000, ms: 1, f: 1000 / fps, t: 1000 / tickRate }
@@ -210,11 +210,25 @@ const xmlUnescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
 function parseTtml(text: string) {
   // EBU-TT and some broadcast exports prefix every element (<tt:p>, <tt:br/>). Same length per line, so line numbers stay right.
   text = text.replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, '<$1')
+  // Comments are blanked, not cut, so line numbers stay right.
+  text = text.replace(/<!--[\s\S]*?-->/g, c => c.replace(/[^\n]/g, ' '))
   const cues: Cue[] = [], lineOf: number[] = [], issues: ParseIssue[] = []
-  const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)(?:[\\w-]+:)?${name}\\s*=\\s*"([^"]*)"`))?.[1]
+  const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)(?:[\\w-]+:)?${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`))?.slice(1).find(v => v !== undefined)
   const tt = text.match(/<tt[\s>][^>]*>/)?.[0] ?? ''
-  const fps = +(attr(tt, 'frameRate') ?? 30) * (attr(tt, 'frameRateMultiplier')?.split(' ').map(Number).reduce((a, b) => a / b) ?? 1)
-  const tickRate = +(attr(tt, 'tickRate') ?? 10000000)
+  // A rate that cannot be read is NaN, which makes every time that needs it unreadable.
+  const rate = (name: string, fallback: number) => {
+    const v = attr(tt, name)
+    if (v === undefined) return fallback
+    // "1000 1001" in TTML, "1000:1001" in DFXP.
+    const m = name === 'frameRateMultiplier' ? v.trim().match(/^(\d+(?:\.\d+)?)(?:[\s:]+(\d+))?$/) : v.trim().match(/^(\d+(?:\.\d+)?)$/)
+    const n = m ? +m[1] / +(m[2] ?? 1) : NaN
+    if (Number.isFinite(n) && n > 0) return n
+    issues.push({ line: 1, kind: 'format', severity: 'error', message: `Unreadable ${name}="${v.slice(0, 40)}". Times that need it are skipped.` })
+    return NaN
+  }
+  const fps = rate('frameRate', 30) * rate('frameRateMultiplier', 1)
+  const tickRate = rate('tickRate', 10000000)
+  if (tt && !/<\/tt\s*>/.test(text)) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'The file ends before </tt>: it is cut off and cues are missing.' })
   const lineStarts: number[] = [0]
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lineStarts.push(i + 1)
   const lineAt = (pos: number) => { let lo = 0, hi = lineStarts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lineStarts[mid] <= pos) lo = mid; else hi = mid - 1 } return lo + 1 }
@@ -225,19 +239,21 @@ function parseTtml(text: string) {
     if (id && attr(sm[1], 'fontStyle') === 'italic') italicStyles.add(id)
   }
   const isItalic = (at: string) => attr(at, 'fontStyle') === 'italic' || (attr(at, 'style') ?? '').split(/\s+/).some(id => italicStyles.has(id))
-  const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/g
+  const re = /<p\b([^>]*?)(?:\/>|>([\s\S]*?)<\/p>)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text))) {
     const line = lineAt(m.index)
+    const content = m[2] ?? '' // none in <p .../>
     const b = attr(m[1], 'begin'), e = attr(m[1], 'end'), d = attr(m[1], 'dur')
     const start = b ? ttmlTime(b, fps, tickRate) : null
     let end = e ? ttmlTime(e, fps, tickRate) : null
     if (end === null && d && start !== null) { const dd = ttmlTime(d, fps, tickRate); end = dd === null ? null : start + dd }
-    if (start === null || end === null) {
+    if (start === null || end === null || !Number.isFinite(start) || !Number.isFinite(end)) {
+      if (m[2] === undefined && !b && !e && !d) continue
       issues.push({ line, kind: 'timecode', severity: 'error', message: `Missing or unreadable begin/end on <p> (begin="${b ?? ''}", end="${e ?? d ?? ''}"). Cue skipped.` })
       continue
     }
-    const raw = isItalic(m[1]) ? `<span tts:fontStyle="italic">${m[2]}</span>` : m[2]
+    const raw = isItalic(m[1]) ? `<span tts:fontStyle="italic">${content}</span>` : content
     const body = raw
       .replace(/\s*\n\s*/g, ' ')
       .replace(/<br\s*\/?>/g, '\n')
@@ -247,7 +263,7 @@ function parseTtml(text: string) {
     lineOf.push(line)
   }
   if (!cues.length && !issues.length) issues.push({ line: 1, kind: 'format', severity: 'error', message: 'No <p begin=".." end=".."> elements found.' })
-  return { cues, lineOf, issues, frameRate: fps }
+  return { cues, lineOf, issues, frameRate: Number.isFinite(fps) ? fps : undefined }
 }
 
 // ---------- SBV ----------
