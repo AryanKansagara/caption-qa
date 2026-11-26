@@ -41,4 +41,5 @@ cp .env.example .env   # optional: public Supabase URL and publishable key for s
 npm run dev
 npm test               # engine tests
 npm run build
+npm run test:e2e       # Playwright on the production build; E2E_PORT picks the port (first time: npx playwright install chromium)
 ```
