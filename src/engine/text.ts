@@ -53,6 +53,21 @@ export function weakEnd(line: string, lang: string): string | null {
 /** Is this a dialogue cue ("-Hi.\n-Hello.")? Those keep their own breaks. */
 export const isDialogue = (text: string) => text.split('\n').length > 1 && text.split('\n').every(l => /^\s*(<i>)?\s*[-–]/.test(l))
 
+const LATIN_END = /[\p{L}\p{N},.!?;:'")\]]$/u, LATIN_START = /^[\p{L}\p{N}'"(\[]/u
+
+/**
+ * A cue on one line. A line break stands for a space, also in Korean; Chinese and Japanese get one
+ * only between two pieces of Latin text.
+ */
+export function joinLines(text: string, lang: string): string {
+  const spaced = !isCJK(lang) || primaryLang(lang) === 'ko'
+  return text.split('\n').map(s => s.trim()).reduce((a, b) => {
+    const end = plain(a).slice(-1), start = plain(b).slice(0, 1)
+    const latin = LATIN_END.test(end) && LATIN_START.test(start) && !HAN_KANA.test(end) && !HAN_KANA.test(start)
+    return a + (spaced || latin ? ' ' : '') + b
+  })
+}
+
 function scoreBreak(a: string, b: string, max: number, lang: string, half: boolean) {
   const la = lineChars(a, half), lb = lineChars(b, half)
   // Small imbalances are fine; keeping linguistic units together matters more than equal lengths.
@@ -71,7 +86,7 @@ function scoreBreak(a: string, b: string, max: number, lang: string, half: boole
  */
 export function rebreak(text: string, maxChars: number, lang = 'en', halfWidthLatin = false): string {
   if (isDialogue(text)) return text
-  const flat = text.split('\n').map(s => s.trim()).join(isCJK(lang) ? '' : ' ').replace(/\s+/g, ' ').trim()
+  const flat = joinLines(text, lang).replace(/\s+/g, ' ').trim()
   if (lineChars(flat, halfWidthLatin) <= maxChars) return flat
   const cuts: number[] = []
   if (isCJK(lang) && !/\s/.test(flat)) {
@@ -132,7 +147,7 @@ export function breakProblem(text: string, maxChars: number, maxLines: number, l
   if (lines.length > maxLines) return 'too-many'
   if (isDialogue(text) || lines.length !== 2) return null
   if (weakEnd(lines[0], lang)) return 'weak-end'
-  if (lineChars(lines.join(' '), half) <= maxChars) return 'one-line'
+  if (lineChars(joinLines(text, lang), half) <= maxChars) return 'one-line'
   const better = rebreak(text, maxChars, lang, half)
   return better !== text && breakScore(better, maxChars, lang, half) + 15 < breakScore(text, maxChars, lang, half) ? 'unbalanced' : null
 }
