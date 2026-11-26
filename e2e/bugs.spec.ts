@@ -18,7 +18,7 @@ async function acceptAll(page: Page) {
 }
 const times = (s: string) => s.match(/.* --> .*/g)
 
-test.fail('#2 a PySceneDetect scene list loads its start times, not its scene numbers', async ({ page }) => {
+test('#2 a PySceneDetect scene list loads its start times, not its scene numbers', async ({ page }) => {
   await newProject(page)
   await page.getByLabel('Shot list').fill('Timecode List:,00:00:05.005,00:00:09.510\nScene Number,Start Frame,Start Timecode,Start Time (seconds),End Frame\n1,1,00:00:00.000,0.000,120\n2,121,00:00:05.005,5.005,228\n3,229,00:00:09.510,9.510,300\n')
   await page.getByRole('button', { name: 'Load shot list' }).click()
